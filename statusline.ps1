@@ -1,3 +1,8 @@
+<#
+.SYNOPSIS
+    Custom statusline for Antigravity CLI (Windows 11 PowerShell Port).
+    Based on agy-statusline by Jochen Kirstätter (https://codeberg.org/jochenkirstaetter/agy-statusline).
+#>
 #!/usr/bin/env pwsh
 
 param(
@@ -846,5 +851,6 @@ foreach ($line in $OUTPUT_LINES) {
     Write-Output $line
     Write-Log "OUTPUT: $line"
 }
+
 
 

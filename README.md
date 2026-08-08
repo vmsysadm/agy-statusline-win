@@ -2,6 +2,10 @@
 
 A responsive, high-performance custom statusline for the **Antigravity CLI** on Windows 11 using PowerShell Core.
 
+## Credits & Acknowledgments
+
+This project is a Windows 11 PowerShell port derived from the original [agy-statusline](https://codeberg.org/jochenkirstaetter/agy-statusline) by **Jochen Kirstätter** ([@jochenkirstaetter](https://codeberg.org/jochenkirstaetter)) on Codeberg.
+
 ## Features
 
 - **Dual Quota Display**: Displays both 5-Hour and Weekly remaining quotas side-by-side (e.g. `96% 5h 4h48m` and `75% wk 100h`).
