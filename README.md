@@ -2,15 +2,23 @@
 
 A responsive, high-performance custom statusline for the **Antigravity CLI** on Windows 11 using PowerShell Core.
 
+## Screenshots
+
+### Wide Layout (Dual Quota Mode)
+![Wide Layout - Dual Quota Mode](docs/statusline_dual.png)
+
+### Medium Layout (Single Quota Mode)
+![Medium Layout - Single Quota Mode](docs/statusline_single.png)
+
 ## Credits & Acknowledgments
 
 This project is a Windows 11 PowerShell port derived from the original [agy-statusline](https://codeberg.org/jochenkirstaetter/agy-statusline) by **Jochen Kirstätter** ([@jochenkirstaetter](https://codeberg.org/jochenkirstaetter)) on Codeberg.
 
 ## Features
 
-- **Dual Quota Display**: Displays both 5-Hour and Weekly remaining quotas side-by-side (e.g. `96% 5h 4h48m` and `75% wk 100h`).
+- **Dual Quota Display**: Displays both 5-Hour and Weekly remaining quotas side-by-side (e.g. `90% 5h 4h40m` and `74% wk 100h32m`).
 - **Responsive Layout System**: Dynamically adjusts to terminal window width with parallel right-alignment.
-- **Rich Diagnostics**: Agent state, YOLO permissions warning, active cycle mode (`ACCEPT-EDITS` / `PLAN`), active model ID, CWD, Git branch & dirty status, Conversation ID, artifact counts, subagents, and background tasks.
+- **Rich Diagnostics**: Agent state, YOLO permissions warning, active cycle mode (`ACCEPT-EDITS` / `PLAN`), active model ID, CWD, Git branch & dirty status, Conversation ID, token counts (input/output), artifact counts, subagents, and background tasks.
 - **Color & Icon Customization**: Fully configurable themes via `statusline_config.json` supporting Truecolor (24-bit RGB) and ANSI escape sequences.
 
 ## Quick One-Line Installation
