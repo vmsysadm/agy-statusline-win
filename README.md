@@ -1,6 +1,6 @@
-# Antigravity CLI Custom Statusline (Windows 11) - v0.2
+# Antigravity CLI Custom Statusline (Windows) - v0.2
 
-A responsive, high-performance Rust-compiled custom statusline for **Antigravity CLI** on Windows 11.
+A responsive, high-performance Rust-compiled custom statusline for **Antigravity CLI** on Windows.
 
 ## Screenshots
 
@@ -23,7 +23,7 @@ This project is derived from the original [agy-statusline](https://codeberg.org/
 
 ## Quick One-Line Installation
 
-Run the following command in PowerShell on Windows 11:
+Run the following command in PowerShell on Windows:
 
 ```powershell
 irm https://raw.githubusercontent.com/vmsysadm/agy-statusline-win/main/install.ps1 | iex

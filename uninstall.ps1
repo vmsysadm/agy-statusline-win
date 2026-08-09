@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Uninstalls custom statusline for Antigravity CLI on Windows 11.
+    Uninstalls custom statusline for Antigravity CLI on Windows.
 #>
 $targetDir = Join-Path $env:USERPROFILE ".gemini\antigravity-cli"
 $settingsPath = Join-Path $targetDir "settings.json"

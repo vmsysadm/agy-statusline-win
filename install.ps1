@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Installs Rust-compiled custom statusline for Antigravity CLI on Windows 11.
+    Installs Rust-compiled custom statusline for Antigravity CLI on Windows.
 #>
 $ErrorActionPreference = "Stop"
 
