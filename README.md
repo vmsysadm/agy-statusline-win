@@ -1,4 +1,4 @@
-# Antigravity CLI Custom Statusline (Windows 11) - v0.1
+# Antigravity CLI Custom Statusline (Windows 11) - v0.2
 
 A responsive, high-performance Rust-compiled custom statusline for **Antigravity CLI** on Windows 11.
 
