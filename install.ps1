@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Installs custom statusline for Antigravity CLI on Windows 11.
+    Installs Rust-compiled custom statusline for Antigravity CLI on Windows 11.
 #>
 $ErrorActionPreference = "Stop"
 
@@ -9,19 +9,25 @@ if (-not (Test-Path $targetDir)) {
     New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
 }
 
-$scriptUrl = "https://raw.githubusercontent.com/vmsysadm/agy-statusline-win/main/statusline.ps1"
-$configUrl = "https://raw.githubusercontent.com/vmsysadm/agy-statusline-win/main/statusline_config.json"
+$binTarget = Join-Path $targetDir "agy-statusline.exe"
+$localBin = Join-Path $PSScriptRoot "target\release\agy-statusline.exe"
+$downloadUrl = "https://github.com/vmsysadm/agy-statusline-win/releases/download/v0.1/agy-statusline.exe"
 
-$ps1Path = Join-Path $targetDir "statusline.ps1"
-$cfgPath = Join-Path $targetDir "statusline_config.json"
+if (Test-Path $localBin) {
+    Write-Host "Installing compiled agy-statusline.exe from local build..." -ForegroundColor Cyan
+    Copy-Item -Path $localBin -Destination $binTarget -Force
+} elseif (Get-Command cargo -ErrorAction SilentlyContinue) {
+    Write-Host "Building agy-statusline with Cargo..." -ForegroundColor Cyan
+    Push-Location $PSScriptRoot
+    cargo build --release
+    Pop-Location
+    Copy-Item -Path $localBin -Destination $binTarget -Force
+} else {
+    Write-Host "Downloading agy-statusline.exe release binary..." -ForegroundColor Cyan
+    Invoke-WebRequest -Uri $downloadUrl -OutFile $binTarget
+}
+
 $settingsPath = Join-Path $targetDir "settings.json"
-
-Write-Host "Downloading statusline.ps1..." -ForegroundColor Cyan
-Invoke-WebRequest -Uri $scriptUrl -OutFile $ps1Path
-
-Write-Host "Downloading statusline_config.json..." -ForegroundColor Cyan
-Invoke-WebRequest -Uri $configUrl -OutFile $cfgPath
-
 if (Test-Path $settingsPath) {
     Write-Host "Updating settings.json..." -ForegroundColor Cyan
     $settings = Get-Content $settingsPath -Raw | ConvertFrom-Json
@@ -37,13 +43,9 @@ if (-not $settings.statusLine) {
     $settings | Add-Member -NotePropertyName "statusLine" -NotePropertyValue ([PSCustomObject]@{}) -Force
 }
 
-$cmdStr = "pwsh.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $ps1Path"
-
-$settings.statusLine | Add-Member -NotePropertyName "command" -NotePropertyValue $cmdStr -Force
-$settings.statusLine | Add-Member -NotePropertyName "configPath" -NotePropertyValue $cfgPath -Force
+$settings.statusLine | Add-Member -NotePropertyName "command" -NotePropertyValue $binTarget -Force
 $settings.statusLine | Add-Member -NotePropertyName "enabled" -NotePropertyValue $true -Force
 
 $settings | ConvertTo-Json -Depth 10 | Set-Content $settingsPath -Encoding utf8
 
-Write-Host "Installation complete! Custom statusline is active." -ForegroundColor Green
-
+Write-Host "Installation complete! High-performance Rust statusline is active." -ForegroundColor Green

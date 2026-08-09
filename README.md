@@ -1,47 +1,59 @@
-# Antigravity CLI Custom Statusline (Windows 11)
+# Antigravity CLI Custom Statusline (Windows 11) - v0.1
 
-A responsive, high-performance custom statusline for the **Antigravity CLI** on Windows 11 using PowerShell Core.
+A responsive, high-performance Rust-compiled custom statusline for **Antigravity CLI** on Windows 11.
 
 ## Screenshots
 
-### Wide Layout (Dual Quota Mode)
-![Wide Layout - Dual Quota Mode](docs/statusline_dual.png)
+### Wide Layout
+![Wide Layout](docs/statusline_dual.png)
 
-### Medium Layout (Single Quota Mode)
-![Medium Layout - Single Quota Mode](docs/statusline_single.png)
+### Medium Layout
+![Medium Layout](docs/statusline_single.png)
 
 ## Credits & Acknowledgments
 
-This project is a Windows 11 PowerShell port derived from the original [agy-statusline](https://codeberg.org/jochenkirstaetter/agy-statusline) by **Jochen Kirstätter** ([@jochenkirstaetter](https://codeberg.org/jochenkirstaetter)) on Codeberg.
+This project is derived from the original [agy-statusline](https://codeberg.org/jochenkirstaetter/agy-statusline) by **Jochen Kirstätter** ([@jochenkirstaetter](https://codeberg.org/jochenkirstaetter)) on Codeberg.
 
 ## Features
 
-- **Dual Quota Display**: Displays both 5-Hour and Weekly remaining quotas side-by-side (e.g. `90% 5h 4h40m` and `74% wk 100h32m`).
-- **Responsive Layout System**: Dynamically adjusts to terminal window width with parallel right-alignment.
-- **Rich Diagnostics**: Agent state, YOLO permissions warning, active cycle mode (`ACCEPT-EDITS` / `PLAN`), active model ID, CWD, Git branch & dirty status, Conversation ID, token counts (input/output), artifact counts, subagents, and background tasks.
-- **Color & Icon Customization**: Fully configurable themes via `statusline_config.json` supporting Truecolor (24-bit RGB) and ANSI escape sequences.
+- **Blazing Fast**: Native Rust binary compiled for low overhead and near-zero execution latency.
+- **Dual Quota Display**: Displays both 5-Hour and Weekly remaining quotas side-by-side.
+- **Responsive Layout System**: Dynamically adjusts layout based on terminal window width with parallel right-alignment.
+- **Rich Diagnostics**: Agent state, cycle mode (`ACCEPT-EDITS` / `PLAN`), active model ID & effort level, CWD, Git branch, Conversation ID, token counts (input/output/total limit), artifact counts, subagent counts, background tasks, and sandbox status.
 
 ## Quick One-Line Installation
 
-Run the following command in PowerShell on any Windows 11 system:
+Run the following command in PowerShell on Windows 11:
 
 ```powershell
 irm https://raw.githubusercontent.com/vmsysadm/agy-statusline-win/main/install.ps1 | iex
 ```
 
+## Build from Source
+
+1. Clone this repository:
+   ```cmd
+   git clone https://github.com/vmsysadm/agy-statusline-win.git
+   cd agy-statusline-win
+   ```
+2. Build the release binary:
+   ```cmd
+   cargo build --release
+   ```
+3. Run `install.ps1` in PowerShell to install the local binary:
+   ```powershell
+   .\install.ps1
+   ```
+
 ## Manual Installation
 
-1. Clone or download this repository.
-2. Copy `statusline.ps1` and `statusline_config.json` to your Antigravity CLI directory:
-   `%USERPROFILE%\.gemini\antigravity-cli\`
-3. Open `%USERPROFILE%\.gemini\antigravity-cli\settings.json` and configure `statusLine`:
+1. Copy `target\release\agy-statusline.exe` to `%USERPROFILE%\.gemini\antigravity-cli\agy-statusline.exe`.
+2. Update `%USERPROFILE%\.gemini\antigravity-cli\settings.json`:
 
 ```json
 {
   "statusLine": {
-    "type": "",
-    "command": "pwsh.exe -ExecutionPolicy Bypass -File C:\\Users\\YOUR_USERNAME\\.gemini\\antigravity-cli\\statusline.ps1",
-    "configPath": "C:\\Users\\YOUR_USERNAME\\.gemini\\antigravity-cli\\statusline_config.json",
+    "command": "C:\\Users\\YOUR_USERNAME\\.gemini\\antigravity-cli\\agy-statusline.exe",
     "enabled": true
   }
 }
@@ -49,7 +61,7 @@ irm https://raw.githubusercontent.com/vmsysadm/agy-statusline-win/main/install.p
 
 ## Uninstallation
 
-Run the following command to disable the statusline:
+Run the uninstallation script:
 
 ```powershell
 irm https://raw.githubusercontent.com/vmsysadm/agy-statusline-win/main/uninstall.ps1 | iex
