@@ -1,12 +1,12 @@
 #!/usr/bin/env pwsh
-try {
-    [System.Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-    
-    param(
-        [Parameter(ValueFromPipeline)]
-        [string]$inputJson
-    )
+param(
+    [Parameter(ValueFromPipeline)]
+    [string]$inputJson
+)
 
+[System.Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
+try {
     if ([string]::IsNullOrWhiteSpace($inputJson)) {
         $inputJson = [System.Console]::In.ReadToEnd()
     }
@@ -20,13 +20,12 @@ try {
         $data = @{}
     }
 
-    # Disable file logging completely
     function Write-Log ($message) {}
 
-    # --- Config & Path Resolution ------------------------------------------------
     $homePath = $env:USERPROFILE
     if ([string]::IsNullOrEmpty($homePath)) { $homePath = $env:HOME }
 
+    $cliDir = Join-Path $homePath ".gemini\antigravity-cli"
     $CONFIG_PATH = Join-Path $cliDir "statusline_config.json"
 
     function Convert-ColorValue([string]$colorVal) {
@@ -47,7 +46,6 @@ try {
         })
     }
 
-    # Load statusline_config.json if it exists
     if (Test-Path $CONFIG_PATH -PathType Leaf) {
         try {
             $cfg = Get-Content $CONFIG_PATH -Raw -Encoding utf8 | ConvertFrom-Json
@@ -97,7 +95,6 @@ try {
         } catch {}
     }
 
-    # --- ANSI Helpers -----------------------------------------------------------
     $R = if ($UI_RESET) { $UI_RESET } else { "$([char]0x1b)[0m" }
     $B = if ($UI_BOLD) { $UI_BOLD } else { "$([char]0x1b)[1m" }
     $D = if ($UI_DIM) { $UI_DIM } else { "$([char]0x1b)[2m" }
@@ -124,15 +121,12 @@ try {
     $NUM_COLOR = "${FG_BRIGHT_WHITE}${B}"
     $DOT = if ($UI_SEPARATOR) { $UI_SEPARATOR } else { "${FG_GRAY} | ${R}" }
 
-    # --- Icons & Glyphs Configuration --------------------------------------------
     $USE_NERD_FONTS = $true
     if ($data -and $data.nerd_fonts_supported -ne $null) {
         $USE_NERD_FONTS = [bool]$data.nerd_fonts_supported
     } elseif ($env:USE_NERD_FONTS -eq "false") {
         $USE_NERD_FONTS = $false
     }
-
-    $ICON_WIDTH_ADJUST = 0
 
     function Get-Char([long]$code) {
         if ($code -le 0xFFFF) { return [char]$code }
@@ -191,14 +185,12 @@ try {
         $ICON_YOLO = if ($ICON_EMOJI_YOLO) { $ICON_EMOJI_YOLO } else { Get-Char 0x26A0 }
     }
 
-    # Box Drawing & Block Constants
-    $BLOCK_FULL = Get-Char 0x2588  # Full Block
-    $BLOCK_DARK = Get-Char 0x2593  # Dark Shade
-    $BLOCK_MED  = Get-Char 0x2592  # Medium Shade
-    $BLOCK_LIGHT = Get-Char 0x2591 # Light Shade
-    $BOX_SLASH = Get-Char 0x2571   # Box Diagonal Slash
+    $BLOCK_FULL = Get-Char 0x2588
+    $BLOCK_DARK = Get-Char 0x2593
+    $BLOCK_MED  = Get-Char 0x2592
+    $BLOCK_LIGHT = Get-Char 0x2591
+    $BOX_SLASH = Get-Char 0x2571
 
-    # --- Extract JSON Fields Safely ----------------------------------------------
     $STATE = if ($data.agent_state) { $data.agent_state } else { "idle" }
     $USED_PCT = if ($data.context_window -and $data.context_window.used_percentage) { [double]$data.context_window.used_percentage } else { 0 }
     $SANDBOX = if ($data.sandbox -and $data.sandbox.enabled -ne $null) { [bool]$data.sandbox.enabled } else { $false }
@@ -229,7 +221,6 @@ try {
 
     $CYCLE_MODE = if ($data.cycle_mode) { $data.cycle_mode } else { "" }
 
-    # --- Quota properties ---
     $MATCHED_QUOTAS = @()
 
     if ($data.quota) {
@@ -292,10 +283,7 @@ try {
         }
     }
 
-    # --- VCS direct Git queries --------------------------------------------------
     $VCS_BRANCH = ""
-    $VCS_DIRTY = $false
-
     if (![string]::IsNullOrEmpty($CWD) -and (Test-Path (Join-Path $CWD ".git"))) {
         try {
             $branchObj = git -C "$CWD" branch --show-current 2>$null
@@ -305,7 +293,6 @@ try {
         } catch {}
     }
 
-    # --- Measure Visible Length --------------------------------------------------
     function Get-VisibleLength ($str) {
         if ([string]::IsNullOrEmpty($str)) { return 0 }
         $ansiPattern = "$([char]0x1b)\[[0-9;]*m"
@@ -313,7 +300,6 @@ try {
         return [System.Globalization.StringInfo]::new($clean).LengthInTextElements
     }
 
-    # --- Path Shortening Helper --------------------------------------------------
     function Get-ShortenedPath ($path, $maxLen) {
         if ([string]::IsNullOrEmpty($path)) { return "" }
         $shortPath = $path
@@ -329,7 +315,6 @@ try {
         }
     }
 
-    # --- VCS Format Helper -------------------------------------------------------
     function Format-Branch ($maxLen) {
         if ([string]::IsNullOrEmpty($VCS_BRANCH)) { return "" }
         $name = $VCS_BRANCH
@@ -339,7 +324,6 @@ try {
         return "${FG_BRIGHT_BLUE}${ICON_BRANCH} ${name}${R}"
     }
 
-    # --- Sandbox Format Helper ---------------------------------------------------
     function Format-Sandbox ($mode) {
         if ($SANDBOX) {
             $icon = if ($SANDBOX_NET) { $ICON_SB_NET } else { $ICON_SB_NONET }
@@ -360,7 +344,6 @@ try {
         }
     }
 
-    # --- Time Formatting Helper --------------------------------------------------
     function Format-Seconds ($s) {
         if ($s -le 0) { return "0s" }
         if ($s -ge 3600) {
@@ -375,7 +358,6 @@ try {
         }
     }
 
-    # --- Quota Format Helper -----------------------------------------------------
     function Format-Quota ($mode) {
         if (-not $MATCHED_QUOTAS -or $MATCHED_QUOTAS.Count -eq 0) { return "" }
         
@@ -431,7 +413,6 @@ try {
         return $formattedParts -join " "
     }
 
-    # --- Progress Bar Builder ----------------------------------------------------
     $PCT_INT = [int]$USED_PCT
     $FILL_COLOR = if ($PCT_INT -ge 90) { $FG_BRIGHT_RED } elseif ($PCT_INT -ge 60) { $FG_BRIGHT_YELLOW } else { $FG_YELLOW }
 
@@ -454,7 +435,6 @@ try {
         return $bar
     }
 
-    # --- Horizontal Separators & Joins ------------------------------------------
     function Join-WithDot {
         $items = @()
         foreach ($arg in $args) {
@@ -471,7 +451,6 @@ try {
         return $items -join "  "
     }
 
-    # --- Human Token Formatting Helper -------------------------------------------
     function Get-HumanFormat ($num) {
         if ([string]::IsNullOrEmpty($num) -or $num -eq 0) { return "0" }
         try { $n = [int64]$num } catch { return $num }
@@ -489,13 +468,11 @@ try {
         }
     }
 
-    # --- Layout Component Formatting ---------------------------------------------
     $INPUT_TOK_FMT = Get-HumanFormat $INPUT_TOKENS
     $OUTPUT_TOK_FMT = Get-HumanFormat $OUTPUT_TOKENS
     $TXT_LIMIT_FMT = Get-HumanFormat $TXT_LIMIT
     $CTX_USED_FMT = Get-HumanFormat $CTX_USED
 
-    # State badge S
     $S = ""
     switch ($STATE) {
         "idle"     { $S = "${FG_BRIGHT_GREEN}${B}${ICON_READY} READY${R}" }
@@ -505,7 +482,6 @@ try {
         default    { $S = "${FG_WHITE}${B}${ICON_UNKNOWN} $($STATE.ToUpper())${R}" }
     }
 
-    # CWD
     $CWD_WIDE_VAL = Get-ShortenedPath $CWD 25
     $DIR_WIDE = if (![string]::IsNullOrEmpty($CWD_WIDE_VAL)) { "${FG_CYAN}${ICON_FOLDER} ${R}${CWD_WIDE_VAL}${R}" } else { "" }
 
@@ -515,7 +491,6 @@ try {
     $CWD_NARROW_VAL = Get-ShortenedPath $CWD 0
     $DIR_NARROW = if (![string]::IsNullOrEmpty($CWD_NARROW_VAL)) { "${FG_CYAN}${ICON_FOLDER} ${R}${CWD_NARROW_VAL}${R}" } else { "" }
 
-    # Model name & effort
     if ([string]::IsNullOrEmpty($MODEL_EFFORT) -and $MODEL_NAME -match "\(([^)]+)\)") {
         $MODEL_EFFORT = $Matches[1]
     }
@@ -539,22 +514,18 @@ try {
         "${FG_BRIGHT_MAGENTA}${I}${ICON_MODEL} $($MODEL_MED_STR.Substring(0, $len))${R}"
     } else { "" }
 
-    # VCS
     $V_WIDE = Format-Branch 15
     $V_MED = Format-Branch 10
     $V_NARROW = Format-Branch 6
 
-    # Conversation ID
     $CONV_WIDE = if (![string]::IsNullOrEmpty($CONV_ID)) { "${FG_GRAY}${ICON_CONV} $($CONV_ID.Substring(0, [math]::Min($CONV_ID.Length, 8)))${R}" } else { "" }
     $CONV_MED = if (![string]::IsNullOrEmpty($CONV_ID)) { "${FG_GRAY}${ICON_CONV} $($CONV_ID.Substring(0, [math]::Min($CONV_ID.Length, 4)))${R}" } else { "" }
     $CONV_NARROW = ""
 
-    # Sandbox badge
     $SB_WIDE = Format-Sandbox "wide"
     $SB_MED = Format-Sandbox "med"
     $SB_NARROW = Format-Sandbox "narrow"
 
-    # Context Bar
     $BAR_WIDE = Make-Bar 15
     $BAR_MED = Make-Bar 10
     $BAR_NARROW = Make-Bar 6
@@ -565,7 +536,6 @@ try {
     $CTX_BAR_MED = "${FG_YELLOW}${ICON_CTX}  ${R}${BAR_MED} ${NUM_COLOR}${PCT_FMT}%${R}"
     $CTX_BAR_NARROW = "${FG_YELLOW}${ICON_CTX}  ${R}${BAR_NARROW} ${NUM_COLOR}$([int]$USED_PCT)%${R}"
 
-    # Token Details
     $TOK_DETAILS_WIDE = ""
     if ($CTX_USED -gt 0) {
         $TOK_DETAILS_WIDE = " (${CTX_USED_FMT}/${TXT_LIMIT_FMT})${DOT}${FG_YELLOW}${ICON_TOK} ${R} (${INPUT_TOK_FMT} in/${OUTPUT_TOK_FMT} out)"
@@ -576,7 +546,6 @@ try {
         $TOK_DETAILS_MED = " (${CTX_USED_FMT}/${TXT_LIMIT_FMT})"
     }
 
-    # Number Indicators
     $ART_WIDE = "${FG_BLUE}${ICON_ART} ${NUM_COLOR}${ARTIFACTS}${R}"
     $SUB_WIDE = "${FG_CYAN}${ICON_SUB} ${NUM_COLOR}${SUBAGENTS}${R}"
     $BG_WIDE = "${FG_MAGENTA}${ICON_BG} ${NUM_COLOR}${BG_TASKS}${R}"
@@ -589,12 +558,10 @@ try {
     $SUB_NARROW = "${FG_CYAN}${ICON_SUB}${NUM_COLOR}${SUBAGENTS}${R}"
     $BG_NARROW = "${FG_MAGENTA}${ICON_BG}${NUM_COLOR}${BG_TASKS}${R}"
 
-    # --- Quota Indicator Variants ---
     $QUOTA_WIDE = Format-Quota "wide"
     $QUOTA_MED = Format-Quota "med"
     $QUOTA_NARROW = Format-Quota "narrow"
 
-    # --- Cycle Mode Segment ---
     $CYCLE_SEG = ""
     if ($CYCLE_MODE -eq "accept-edits") {
         $CYCLE_SEG = "${FG_BRIGHT_YELLOW}${B}${ICON_CYCLE_ACCEPT} ACCEPT-EDITS${R}"
@@ -602,14 +569,12 @@ try {
         $CYCLE_SEG = "${FG_BRIGHT_BLUE}${B}${ICON_CYCLE_PLAN} PLAN${R}"
     }
 
-    # --- Assemble Single Row Layouts ---
     $LINE1_WIDE = Join-WithDot $S $CYCLE_SEG $M_WIDE $DIR_WIDE $V_WIDE $CONV_WIDE
     $LINE2_WIDE = Join-WithDot $ART_WIDE $SUB_WIDE $BG_WIDE $SB_WIDE "${CTX_BAR_WIDE}${TOK_DETAILS_WIDE}" $QUOTA_WIDE
 
     $LINE1_MED = Join-WithDot $S $CYCLE_SEG $M_MED $DIR_MED $V_MED
     $LINE2_MED = Join-WithDot $ART_MED $SUB_MED $BG_MED $SB_MED "${CTX_BAR_MED}${TOK_DETAILS_MED}" $QUOTA_MED
 
-    # --- Right-alignment Printer Helper ------------------------------------------
     function Print-RightAligned ($left, $right, $totalCols) {
         $left_vis = Get-VisibleLength $left
         $right_vis = Get-VisibleLength $right
@@ -621,7 +586,6 @@ try {
         return "${left}${spaces}${right}"
     }
 
-    # --- Output Compilation ------------------------------------------------------
     $MARGIN = 8
 
     $LEN1_WIDE = Get-VisibleLength $LINE1_WIDE
@@ -676,6 +640,5 @@ try {
         Write-Output $line
     }
 } catch {
-    # Suppress any error and exit zero to prevent CLI statusline failure
     Write-Output ""
 }
