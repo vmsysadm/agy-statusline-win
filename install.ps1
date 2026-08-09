@@ -37,7 +37,7 @@ if (-not $settings.statusLine) {
     $settings | Add-Member -NotePropertyName "statusLine" -NotePropertyValue ([PSCustomObject]@{}) -Force
 }
 
-$cmdStr = "pwsh.exe -ExecutionPolicy Bypass -File $ps1Path"
+$cmdStr = "pwsh.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $ps1Path"
 
 $settings.statusLine | Add-Member -NotePropertyName "command" -NotePropertyValue $cmdStr -Force
 $settings.statusLine | Add-Member -NotePropertyName "configPath" -NotePropertyValue $cfgPath -Force
@@ -46,3 +46,4 @@ $settings.statusLine | Add-Member -NotePropertyName "enabled" -NotePropertyValue
 $settings | ConvertTo-Json -Depth 10 | Set-Content $settingsPath -Encoding utf8
 
 Write-Host "Installation complete! Custom statusline is active." -ForegroundColor Green
+
