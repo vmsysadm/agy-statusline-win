@@ -6,3 +6,4 @@ handoff.md
 *.log
 .DS_Store
 Thumbs.db
+last_statusline_input.json

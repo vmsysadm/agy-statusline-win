@@ -6,73 +6,94 @@ use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 
 #[derive(Deserialize, Debug, Default)]
+#[serde(rename_all = "camelCase")]
 struct ContextWindow {
-    #[serde(default)]
+    #[serde(default, alias = "used_percentage")]
     used_percentage: Option<f64>,
-    #[serde(default)]
+    #[serde(default, alias = "total_input_tokens")]
     total_input_tokens: Option<u64>,
-    #[serde(default)]
+    #[serde(default, alias = "total_output_tokens")]
     total_output_tokens: Option<u64>,
-    #[serde(default)]
+    #[serde(default, alias = "context_window_size")]
     context_window_size: Option<u64>,
 }
 
 #[derive(Deserialize, Debug, Default)]
+#[serde(rename_all = "camelCase")]
 struct Sandbox {
     #[serde(default)]
     enabled: Option<bool>,
-    #[serde(default)]
+    #[serde(default, alias = "allow_network")]
     allow_network: Option<bool>,
 }
 
 #[derive(Deserialize, Debug, Default)]
+#[serde(rename_all = "camelCase")]
 struct Model {
     #[serde(default)]
     id: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "display_name")]
     display_name: Option<String>,
     #[serde(default)]
     effort: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "effort_level")]
     effort_level: Option<String>,
 }
 
 #[derive(Deserialize, Debug, Default, Clone)]
+#[serde(rename_all = "camelCase")]
 struct QuotaEntry {
-    #[serde(default)]
+    #[serde(default, alias = "remaining_fraction")]
     remaining_fraction: Option<f64>,
-    #[serde(default)]
+    #[serde(default, alias = "reset_in_seconds")]
     reset_in_seconds: Option<u64>,
 }
 
 #[derive(Deserialize, Debug, Default)]
+#[serde(rename_all = "camelCase")]
 struct InputData {
-    #[serde(default)]
+    #[serde(default, alias = "agent_state")]
     agent_state: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "context_window")]
     context_window: Option<ContextWindow>,
     #[serde(default)]
     sandbox: Option<Sandbox>,
-    #[serde(default)]
+    #[serde(default, alias = "artifact_count")]
     artifact_count: Option<u64>,
-    #[serde(default)]
+    #[serde(default, alias = "task_count")]
     task_count: Option<u64>,
     #[serde(default)]
     subagents: Option<serde_json::Value>,
     #[serde(default)]
     model: Option<Model>,
-    #[serde(default)]
+    #[serde(default, alias = "terminal_width")]
     terminal_width: Option<usize>,
     #[serde(default)]
     cwd: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "conversation_id")]
     conversation_id: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "cycle_mode")]
     cycle_mode: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "nerd_fonts_supported")]
     nerd_fonts_supported: Option<bool>,
     #[serde(default)]
     quota: Option<HashMap<String, QuotaEntry>>,
+    #[serde(default, alias = "auto_approve")]
+    auto_approve: Option<bool>,
+    #[serde(default, alias = "auto_approve_enabled")]
+    auto_approve_enabled: Option<bool>,
+    #[serde(default, alias = "dangerously_skip_permissions")]
+    dangerously_skip_permissions: Option<bool>,
+    #[serde(default, alias = "skip_permissions")]
+    skip_permissions: Option<bool>,
+    #[serde(default, alias = "approval_mode")]
+    approval_mode: Option<String>,
+    #[serde(default)]
+    mode: Option<String>,
+    #[serde(default)]
+    yolo: Option<bool>,
+    #[serde(default, alias = "is_yolo")]
+    is_yolo: Option<bool>,
 }
 
 #[derive(Deserialize, Debug, Default)]
@@ -92,9 +113,16 @@ struct ConfigIcons {
 }
 
 #[derive(Deserialize, Debug, Default)]
+#[serde(rename_all = "camelCase")]
 struct Config {
     colors: Option<ConfigColors>,
     icons: Option<ConfigIcons>,
+    #[serde(default, alias = "show_yolo")]
+    show_yolo: Option<bool>,
+    #[serde(default, alias = "always_show_yolo")]
+    always_show_yolo: Option<bool>,
+    #[serde(default)]
+    yolo: Option<bool>,
 }
 
 fn convert_color_value(val: &str) -> String {
@@ -531,11 +559,119 @@ fn join_with_space(items: &[String]) -> String {
     items.iter().filter(|s| !s.is_empty()).cloned().collect::<Vec<_>>().join("  ")
 }
 
+fn detect_yolo_in_json(v: &serde_json::Value) -> bool {
+    match v {
+        serde_json::Value::Object(map) => {
+            for (key, val) in map {
+                let k_lower = key.to_lowercase();
+
+                if k_lower == "sandbox" || k_lower == "cwd" || k_lower == "conversation_id" || k_lower == "conversationid" {
+                    continue;
+                }
+
+                let is_yolo_key = k_lower.contains("yolo")
+                    || k_lower.contains("dangerously")
+                    || k_lower.contains("skippermission")
+                    || k_lower.contains("skip_permission")
+                    || k_lower.contains("autoapprove")
+                    || k_lower.contains("auto_approve")
+                    || k_lower.contains("approval")
+                    || k_lower.contains("permission")
+                    || k_lower == "mode";
+
+                if is_yolo_key {
+                    match val {
+                        serde_json::Value::Bool(b) => {
+                            if *b {
+                                return true;
+                            }
+                        }
+                        serde_json::Value::String(s) => {
+                            let s_lower = s.to_lowercase();
+                            if s_lower == "yolo"
+                                || s_lower == "auto_approve"
+                                || s_lower == "auto-approve"
+                                || s_lower == "autoapprove"
+                                || s_lower == "skip"
+                                || s_lower == "true"
+                                || s_lower == "enabled"
+                            {
+                                return true;
+                            }
+                        }
+                        _ => {}
+                    }
+                } else if let serde_json::Value::String(s) = val {
+                    let s_lower = s.to_lowercase();
+                    if s_lower == "yolo" || s_lower == "auto_approve" || s_lower == "auto-approve" {
+                        return true;
+                    }
+                }
+
+                if detect_yolo_in_json(val) {
+                    return true;
+                }
+            }
+            false
+        }
+        serde_json::Value::Array(arr) => {
+            for item in arr {
+                if let serde_json::Value::String(s) = item {
+                    let s_lower = s.to_lowercase();
+                    if s_lower.contains("dangerously") || s_lower.contains("yolo") || s_lower.contains("skip_permission") {
+                        return true;
+                    }
+                }
+                if detect_yolo_in_json(item) {
+                    return true;
+                }
+            }
+            false
+        }
+        _ => false,
+    }
+}
+
+fn check_process_cmdline_for_yolo() -> bool {
+    let mut sys = sysinfo::System::new();
+    sys.refresh_processes_specifics(
+        sysinfo::ProcessRefreshKind::new().with_cmd(sysinfo::UpdateKind::Always),
+    );
+
+    // Walk up the parent process chain from our own PID
+    let mut current_pid = sysinfo::Pid::from_u32(std::process::id());
+    // Limit depth to prevent infinite loops from circular parent references
+    for _ in 0..20 {
+        let process = match sys.process(current_pid) {
+            Some(p) => p,
+            None => break,
+        };
+        let name = process.name().to_lowercase();
+        if name.contains("node") || name.contains("agy") || name.contains("antigravity") {
+            for arg in process.cmd() {
+                let arg_lower = arg.to_lowercase();
+                if arg_lower.contains("dangerously")
+                    || arg_lower.contains("skip-permissions")
+                    || arg_lower.contains("skippermissions")
+                {
+                    return true;
+                }
+            }
+        }
+        current_pid = match process.parent() {
+            Some(ppid) => ppid,
+            None => break,
+        };
+    }
+    false
+}
+
 fn main() {
     let mut input = String::new();
     let _ = io::stdin().read_to_string(&mut input);
 
-    let data: InputData = serde_json::from_str(&input).unwrap_or_default();
+    let raw_val: serde_json::Value = serde_json::from_str(&input).unwrap_or(serde_json::Value::Null);
+    let data: InputData = serde_json::from_value(raw_val.clone()).unwrap_or_default();
 
     let home_path = env::var("USERPROFILE").or_else(|_| env::var("HOME")).unwrap_or_default();
     let config_path = PathBuf::from(&home_path).join(".gemini").join("antigravity-cli").join("statusline_config.json");
@@ -806,7 +942,24 @@ fn main() {
         _ => String::new(),
     };
 
-    let yolo_seg = if !sandbox.enabled.unwrap_or(false) {
+    let cfg_yolo = cfg.show_yolo.unwrap_or(false)
+        || cfg.always_show_yolo.unwrap_or(false)
+        || cfg.yolo.unwrap_or(false);
+
+    let data_yolo = detect_yolo_in_json(&raw_val)
+        || check_process_cmdline_for_yolo()
+        || data.yolo.unwrap_or(false)
+        || data.is_yolo.unwrap_or(false)
+        || data.auto_approve.unwrap_or(false)
+        || data.auto_approve_enabled.unwrap_or(false)
+        || data.dangerously_skip_permissions.unwrap_or(false)
+        || data.skip_permissions.unwrap_or(false)
+        || data.approval_mode.as_deref().map(|s| s.eq_ignore_ascii_case("yolo") || s.eq_ignore_ascii_case("auto_approve") || s.eq_ignore_ascii_case("auto-approve")).unwrap_or(false)
+        || data.mode.as_deref().map(|s| s.eq_ignore_ascii_case("yolo")).unwrap_or(false);
+
+    let is_yolo_mode = cfg_yolo || data_yolo;
+
+    let yolo_seg = if is_yolo_mode {
         format!("{}{}{} YOLO{}", fg_bright_red, bold, icon_yolo, reset)
     } else {
         String::new()
@@ -829,7 +982,7 @@ fn main() {
     if cols >= 135 && cols >= (len1_wide + len2_wide + margin) {
         output_lines.push(print_right_aligned(&line1_wide, &line2_wide, cols));
     } else if cols >= 100 {
-        let r1_left = join_with_dot(&[state_seg.clone(), cycle_seg.clone(), m_wide.clone()], &dot);
+        let r1_left = join_with_dot(&[yolo_seg.clone(), state_seg.clone(), cycle_seg.clone(), m_wide.clone()], &dot);
         let r1_right = join_with_dot(&[art_wide.clone(), sub_wide.clone(), bg_wide.clone(), sb_wide.clone()], &dot);
         let r2_left = join_with_dot(&[dir_wide.clone(), v_wide.clone(), conv_wide.clone()], &dot);
         let r2_right = join_with_dot(&[format!("{}{}", ctx_bar_wide, tok_details_wide), quota_wide.clone()], &dot);
@@ -837,7 +990,7 @@ fn main() {
         output_lines.push(print_right_aligned(&r1_left, &r1_right, cols));
         output_lines.push(print_right_aligned(&r2_left, &r2_right, cols));
     } else if cols >= 75 {
-        let r1_left = join_with_dot(&[state_seg.clone(), cycle_seg.clone(), m_med.clone()], &dot);
+        let r1_left = join_with_dot(&[yolo_seg.clone(), state_seg.clone(), cycle_seg.clone(), m_med.clone()], &dot);
         let r1_right = join_with_dot(&[art_med.clone(), sub_med.clone(), bg_med.clone(), sb_med.clone()], &dot);
         let r2_left = join_with_dot(&[dir_med.clone(), v_med.clone(), conv_med.clone()], &dot);
         let r2_right = join_with_dot(&[format!("{}{}", ctx_bar_med, tok_details_med), quota_med.clone()], &dot);
@@ -845,7 +998,7 @@ fn main() {
         output_lines.push(print_right_aligned(&r1_left, &r1_right, cols));
         output_lines.push(print_right_aligned(&r2_left, &r2_right, cols));
     } else if cols >= 50 {
-        let r1_left = join_with_dot(&[state_seg.clone(), cycle_seg.clone(), m_narrow.clone()], &dot);
+        let r1_left = join_with_dot(&[yolo_seg.clone(), state_seg.clone(), cycle_seg.clone(), m_narrow.clone()], &dot);
         let r1_right = join_with_space(&[art_narrow.clone(), sub_narrow.clone(), bg_narrow.clone()]);
         let r2_left = join_with_dot(&[dir_narrow.clone(), v_narrow.clone()], &dot);
         let r2_right = join_with_dot(&[ctx_bar_narrow.clone(), quota_narrow.clone()], &dot);
@@ -853,6 +1006,11 @@ fn main() {
         output_lines.push(print_right_aligned(&r1_left, &r1_right, cols));
         output_lines.push(print_right_aligned(&r2_left, &r2_right, cols));
     } else {
+        let yolo_short = if !yolo_seg.is_empty() {
+            format!("{} ╱ ", yolo_seg)
+        } else {
+            String::new()
+        };
         let cyc_short = if !cycle_seg.is_empty() {
             format!(" {} ╱ {}", fg_gray, cycle_seg)
         } else {
@@ -864,7 +1022,7 @@ fn main() {
         } else {
             String::new()
         };
-        output_lines.push(format!("{}{}{}", state_seg, cyc_short, m_short));
+        output_lines.push(format!("{}{}{}{}", yolo_short, state_seg, cyc_short, m_short));
         output_lines.push(ctx_bar_narrow);
     }
 
@@ -940,6 +1098,22 @@ mod tests {
         assert!(!matched.is_empty());
         assert_eq!(matched[0].key, "gemini-5h");
     }
+
+    #[test]
+    fn test_detect_yolo_in_json() {
+        let v1: serde_json::Value = serde_json::from_str(r#"{"sandbox": {"enabled": false}}"#).unwrap();
+        assert!(!detect_yolo_in_json(&v1));
+
+        let v2: serde_json::Value = serde_json::from_str(r#"{"flags": {"dangerouslySkipPermissions": true}}"#).unwrap();
+        assert!(detect_yolo_in_json(&v2));
+
+        let v3: serde_json::Value = serde_json::from_str(r#"{"config": {"autoApprove": true}}"#).unwrap();
+        assert!(detect_yolo_in_json(&v3));
+
+        let v4: serde_json::Value = serde_json::from_str(r#"{"mode": "yolo"}"#).unwrap();
+        assert!(detect_yolo_in_json(&v4));
+    }
+
 
     #[test]
     fn test_make_bar() {
