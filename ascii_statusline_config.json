@@ -1,4 +1,5 @@
 {
+  "use_ascii": true,
   "colors": {
     "reset": "\u001b[0m",
     "bold": "\u001b[1m",

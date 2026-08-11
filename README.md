@@ -43,17 +43,23 @@ Set the `USE_NERD_FONTS` environment variable to `false` in PowerShell:
 [Environment]::SetEnvironmentVariable("USE_NERD_FONTS", "false", "User")
 ```
 
-### Option 2: Clean ASCII Text Mode (Recommended for Windows Server)
-To avoid any font glyph issues or duplicated label text, copy the provided `ascii_statusline_config.json` configuration to your `%USERPROFILE%\.gemini\antigravity-cli` directory:
+### Option 2: Clean ASCII Text Mode (Recommended for Windows Server & conhost)
+To avoid any font glyph issues, missing character boxes, or duplicated label text, set `"use_ascii": true` in your `statusline_config.json` or copy the provided `ascii_statusline_config.json` configuration to your `%USERPROFILE%\.gemini\antigravity-cli` directory:
 
 ```powershell
 Copy-Item "ascii_statusline_config.json" "$env:USERPROFILE\.gemini\antigravity-cli\statusline_config.json" -Force
 ```
 
+You can also set the `USE_ASCII` environment variable to `true`:
+
+```powershell
+[Environment]::SetEnvironmentVariable("USE_ASCII", "true", "User")
+```
+
 **Clean ASCII Output Preview:**
 ```text
 ! YOLO | * READY | MOD: Gemini 3.6 Flash (medium)                       ART: 0 | SUB: 0 | TASK: 0 | OFF
-DIR: ~\code | ID: c23fc741                  CTX:  ░░░░░░░░░░4.6% (58.4K/1.0M) | TOK: (48.2K in/10.2K out)
+DIR: ~\code | ID: c23fc741                  CTX:  [==========]4.6% (58.4K/1.0M) | TOK: (48.2K in/10.2K out)
 ```
 
 

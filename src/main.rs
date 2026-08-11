@@ -4,6 +4,7 @@ use std::env;
 use std::fs;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
+use unicode_width::UnicodeWidthStr;
 
 #[derive(Deserialize, Debug, Default)]
 #[serde(rename_all = "camelCase")]
@@ -90,6 +91,8 @@ struct InputData {
     approval_mode: Option<String>,
     #[serde(default)]
     mode: Option<String>,
+    #[serde(default, alias = "use_ascii")]
+    use_ascii: Option<bool>,
     #[serde(default)]
     yolo: Option<bool>,
     #[serde(default, alias = "is_yolo")]
@@ -106,23 +109,20 @@ struct ConfigColors {
     ui: Option<HashMap<String, String>>,
 }
 
-#[derive(Deserialize, Debug, Default)]
-struct ConfigIcons {
-    nerd_fonts: Option<serde_json::Value>,
-    emoji_fallback: Option<serde_json::Value>,
-}
 
 #[derive(Deserialize, Debug, Default)]
 #[serde(rename_all = "camelCase")]
 struct Config {
     colors: Option<ConfigColors>,
-    icons: Option<ConfigIcons>,
+    icons: Option<serde_json::Value>,
     #[serde(default, alias = "show_yolo")]
     show_yolo: Option<bool>,
     #[serde(default, alias = "always_show_yolo")]
     always_show_yolo: Option<bool>,
     #[serde(default)]
     yolo: Option<bool>,
+    #[serde(default, alias = "use_ascii")]
+    use_ascii: Option<bool>,
 }
 
 fn convert_color_value(val: &str) -> String {
@@ -170,17 +170,44 @@ fn convert_color_value(val: &str) -> String {
 }
 
 fn get_icon_str(
-    cfg_icons: &Option<serde_json::Value>,
+    active_icon_set: &Option<serde_json::Value>,
+    raw_icons_cfg: &Option<serde_json::Value>,
     category: &str,
     key: &str,
     default_str: &str,
 ) -> String {
-    if let Some(val) = cfg_icons {
-        if let Some(cat) = val.get(category) {
-            if let Some(v) = cat.get(key) {
-                if let Some(s) = v.as_str() {
+    let keys_to_try: Vec<&str> = match key {
+        "ready" => vec!["ready", "idle"],
+        "branch" => vec!["branch", "git"],
+        "background_task" => vec!["background_task", "tasks", "task"],
+        "subagent" => vec!["subagent", "subagents", "agents"],
+        "artifact" => vec!["artifact", "art"],
+        "context" => vec!["context", "ctx"],
+        "token" => vec!["token", "tok"],
+        "conversation" => vec!["conversation", "conv", "id"],
+        "folder" => vec!["folder", "dir"],
+        _ => vec![key],
+    };
+
+    for k in keys_to_try {
+        if let Some(val) = active_icon_set {
+            if let Some(cat) = val.get(category) {
+                if let Some(s) = cat.get(k).and_then(|v| v.as_str()) {
                     return s.to_string();
                 }
+            }
+            if let Some(s) = val.get(k).and_then(|v| v.as_str()) {
+                return s.to_string();
+            }
+        }
+        if let Some(val) = raw_icons_cfg {
+            if let Some(cat) = val.get(category) {
+                if let Some(s) = cat.get(k).and_then(|v| v.as_str()) {
+                    return s.to_string();
+                }
+            }
+            if let Some(s) = val.get(k).and_then(|v| v.as_str()) {
+                return s.to_string();
             }
         }
     }
@@ -221,7 +248,8 @@ fn strip_ansi(s: &str) -> String {
 }
 
 fn visible_len(s: &str) -> usize {
-    strip_ansi(s).chars().count()
+    let clean = strip_ansi(s);
+    UnicodeWidthStr::width(clean.as_str())
 }
 
 fn format_human(num: u64) -> String {
@@ -324,33 +352,39 @@ fn match_quotas(data: &InputData, model_disp: &str) -> Vec<MatchedQuota> {
     matched_quotas
 }
 
-fn make_bar(pct: f64, len: usize, fill_color: &str, fg_gray: &str, reset: &str) -> String {
+fn make_bar(pct: f64, len: usize, fill_color: &str, fg_gray: &str, reset: &str, use_ascii: bool) -> String {
     let pct_int = pct.clamp(0.0, 100.0);
     let filled = ((pct_int * len as f64) / 100.0).floor() as usize;
-    let remainder = ((pct_int * len as f64) % 100.0).floor() as usize;
 
-    let block_full = '\u{2588}';
-    let block_dark = '\u{2593}';
-    let block_med = '\u{2592}';
-    let block_light = '\u{2591}';
+    if use_ascii {
+        let empty = len.saturating_sub(filled);
+        format!("[{}{}{}{}]", fill_color, "=".repeat(filled), reset, " ".repeat(empty))
+    } else {
+        let remainder = ((pct_int * len as f64) % 100.0).floor() as usize;
 
-    let mut bar = String::new();
-    for i in 0..len {
-        if i < filled {
-            bar.push_str(&format!("{}{}{}", fill_color, block_full, reset));
-        } else if i == filled {
-            if remainder >= 75 {
-                bar.push_str(&format!("{}{}{}{}", fill_color, block_dark, reset, fg_gray));
-            } else if remainder >= 50 {
-                bar.push_str(&format!("{}{}{}{}", fill_color, block_med, reset, fg_gray));
+        let block_full = '\u{2588}';
+        let block_dark = '\u{2593}';
+        let block_med = '\u{2592}';
+        let block_light = '\u{2591}';
+
+        let mut bar = String::new();
+        for i in 0..len {
+            if i < filled {
+                bar.push_str(&format!("{}{}{}", fill_color, block_full, reset));
+            } else if i == filled {
+                if remainder >= 75 {
+                    bar.push_str(&format!("{}{}{}{}", fill_color, block_dark, reset, fg_gray));
+                } else if remainder >= 50 {
+                    bar.push_str(&format!("{}{}{}{}", fill_color, block_med, reset, fg_gray));
+                } else {
+                    bar.push_str(&format!("{}{}{}{}", fill_color, block_light, reset, fg_gray));
+                }
             } else {
-                bar.push_str(&format!("{}{}{}{}", fill_color, block_light, reset, fg_gray));
+                bar.push_str(&format!("{}{}{}", fg_gray, block_light, reset));
             }
-        } else {
-            bar.push_str(&format!("{}{}{}", fg_gray, block_light, reset));
         }
+        bar
     }
-    bar
 }
 
 fn format_single_quota(
@@ -364,6 +398,7 @@ fn format_single_quota(
     fg_gray: &str,
     num_color: &str,
     reset: &str,
+    use_ascii: bool,
 ) -> String {
     let pct = (entry.remaining_fraction * 100.0).round() as u64;
     let q_reset = format_seconds(entry.reset_in_seconds);
@@ -387,7 +422,11 @@ fn format_single_quota(
     };
 
     let icon_str = if show_icon {
-        format!("{}{}{}  ", fg_cyan, icon_unknown, reset)
+        if icon_unknown.is_empty() {
+            String::new()
+        } else {
+            format!("{}{}{}  ", fg_cyan, icon_unknown, reset)
+        }
     } else {
         String::new()
     };
@@ -403,7 +442,7 @@ fn format_single_quota(
         );
     }
 
-    let bar = make_bar(pct as f64, 5, q_color, fg_gray, reset);
+    let bar = make_bar(pct as f64, 5, q_color, fg_gray, reset, use_ascii);
     format!(
         "{}{}{}{}%{} {}{}{} {}{}{}",
         icon_str, bar, num_color, pct, reset, fg_gray, clean_name, reset, fg_gray, q_reset, reset
@@ -420,6 +459,7 @@ fn format_quota(
     fg_gray: &str,
     num_color: &str,
     reset: &str,
+    use_ascii: bool,
 ) -> String {
     if matched_quotas.is_empty() {
         return String::new();
@@ -437,6 +477,7 @@ fn format_quota(
             fg_gray,
             num_color,
             reset,
+            use_ascii,
         );
     }
 
@@ -454,6 +495,7 @@ fn format_quota(
             fg_gray,
             num_color,
             reset,
+            use_ascii,
         ));
         first = false;
     }
@@ -722,15 +764,30 @@ fn main() {
         .map(|v| convert_color_value(v))
         .unwrap_or_else(|| format!("{} | {}", fg_gray, reset));
 
-    let use_nerd_fonts = data.nerd_fonts_supported.unwrap_or_else(|| {
-        env::var("USE_NERD_FONTS").map(|v| v != "false").unwrap_or(true)
+    let use_ascii = data.use_ascii.unwrap_or_else(|| {
+        cfg.use_ascii.unwrap_or_else(|| {
+            let env_ascii = env::var("USE_ASCII").map(|v| v == "true" || v == "1").unwrap_or(false);
+            let mode_ascii = data.mode.as_deref().map(|m| m.eq_ignore_ascii_case("ascii")).unwrap_or(false);
+            let raw_ascii = raw_val.get("mode").and_then(|v| v.as_str()).map(|m| m.eq_ignore_ascii_case("ascii")).unwrap_or(false)
+                || raw_val.get("use_ascii").and_then(|v| v.as_bool()).unwrap_or(false)
+                || raw_val.get("useAscii").and_then(|v| v.as_bool()).unwrap_or(false);
+            env_ascii || mode_ascii || raw_ascii
+        })
     });
+
+    let use_nerd_fonts = if use_ascii {
+        false
+    } else {
+        data.nerd_fonts_supported.unwrap_or_else(|| {
+            env::var("USE_NERD_FONTS").map(|v| v == "true" || v == "1").unwrap_or(false)
+        })
+    };
 
     let cfg_icons = cfg.icons.as_ref().and_then(|i| {
         if use_nerd_fonts {
-            i.nerd_fonts.clone()
+            i.get("nerd_fonts").cloned()
         } else {
-            i.emoji_fallback.clone()
+            i.get("emoji_fallback").cloned()
         }
     });
 
@@ -740,30 +797,30 @@ fn main() {
     let cat_cyc = "cycle";
     let cat_oth = "other";
 
-    let icon_ready = get_icon_str(&cfg_icons, cat_state, "ready", if use_nerd_fonts { "\u{f192}" } else { "🟢" });
-    let icon_thinking = get_icon_str(&cfg_icons, cat_state, "thinking", if use_nerd_fonts { "\u{f07f7}" } else { "💭" });
-    let icon_working = get_icon_str(&cfg_icons, cat_state, "working", if use_nerd_fonts { "\u{f423}" } else { "⚙" });
-    let icon_tool = get_icon_str(&cfg_icons, cat_state, "tool", if use_nerd_fonts { "\u{f425}" } else { "⚒" });
-    let icon_unknown = get_icon_str(&cfg_icons, cat_state, "unknown", if use_nerd_fonts { "\u{f252}" } else { "⏳" });
+    let icon_ready = get_icon_str(&cfg_icons, &cfg.icons, cat_state, "ready", if use_ascii { "*" } else if use_nerd_fonts { "\u{f192}" } else { "🟢" });
+    let icon_thinking = get_icon_str(&cfg_icons, &cfg.icons, cat_state, "thinking", if use_ascii { "?" } else if use_nerd_fonts { "\u{f07f7}" } else { "💭" });
+    let icon_working = get_icon_str(&cfg_icons, &cfg.icons, cat_state, "working", if use_ascii { ">" } else if use_nerd_fonts { "\u{f423}" } else { "⚙" });
+    let icon_tool = get_icon_str(&cfg_icons, &cfg.icons, cat_state, "tool", if use_ascii { "=" } else if use_nerd_fonts { "\u{f425}" } else { "⚒" });
+    let icon_unknown = get_icon_str(&cfg_icons, &cfg.icons, cat_state, "unknown", if use_ascii { "~" } else if use_nerd_fonts { "\u{f252}" } else { "⏳" });
 
-    let icon_folder = get_icon_str(&cfg_icons, cat_comp, "folder", if use_nerd_fonts { "\u{ea83}" } else { "📁" });
-    let icon_model = get_icon_str(&cfg_icons, cat_comp, "model", if use_nerd_fonts { "\u{f400}" } else { "💡" });
-    let icon_branch = get_icon_str(&cfg_icons, cat_comp, "branch", if use_nerd_fonts { "\u{f418}" } else { "⎇" });
-    let icon_conv = get_icon_str(&cfg_icons, cat_comp, "conversation", if use_nerd_fonts { "\u{f036a}" } else { "💬" });
-    let icon_ctx = get_icon_str(&cfg_icons, cat_comp, "context", if use_nerd_fonts { "\u{f134f}" } else { "📊" });
-    let icon_tok = get_icon_str(&cfg_icons, cat_comp, "token", if use_nerd_fonts { "\u{e26b}" } else { "🪙" });
-    let icon_art = get_icon_str(&cfg_icons, cat_comp, "artifact", if use_nerd_fonts { "\u{f0f6}" } else { "📄" });
-    let icon_sub = get_icon_str(&cfg_icons, cat_comp, "subagent", if use_nerd_fonts { "\u{f167a}" } else { "🤖" });
-    let icon_bg = get_icon_str(&cfg_icons, cat_comp, "background_task", if use_nerd_fonts { "\u{f0ae}" } else { "📋" });
+    let icon_folder = get_icon_str(&cfg_icons, &cfg.icons, cat_comp, "folder", if use_ascii { "DIR:" } else if use_nerd_fonts { "\u{ea83}" } else { "📁" });
+    let icon_model = get_icon_str(&cfg_icons, &cfg.icons, cat_comp, "model", if use_ascii { "MOD:" } else if use_nerd_fonts { "\u{f400}" } else { "💡" });
+    let icon_branch = get_icon_str(&cfg_icons, &cfg.icons, cat_comp, "branch", if use_ascii { "GIT:" } else if use_nerd_fonts { "\u{f418}" } else { "⎇" });
+    let icon_conv = get_icon_str(&cfg_icons, &cfg.icons, cat_comp, "conversation", if use_ascii { "ID:" } else if use_nerd_fonts { "\u{f036a}" } else { "💬" });
+    let icon_ctx = get_icon_str(&cfg_icons, &cfg.icons, cat_comp, "context", if use_ascii { "CTX:" } else if use_nerd_fonts { "\u{f134f}" } else { "📊" });
+    let icon_tok = get_icon_str(&cfg_icons, &cfg.icons, cat_comp, "token", if use_ascii { "TOK:" } else if use_nerd_fonts { "\u{e26b}" } else { "🪙" });
+    let icon_art = get_icon_str(&cfg_icons, &cfg.icons, cat_comp, "artifact", if use_ascii { "ART:" } else if use_nerd_fonts { "\u{f0f6}" } else { "📄" });
+    let icon_sub = get_icon_str(&cfg_icons, &cfg.icons, cat_comp, "subagent", if use_ascii { "SUB:" } else if use_nerd_fonts { "\u{f167a}" } else { "🤖" });
+    let icon_bg = get_icon_str(&cfg_icons, &cfg.icons, cat_comp, "background_task", if use_ascii { "TASK:" } else if use_nerd_fonts { "\u{f0ae}" } else { "📋" });
 
-    let icon_sb_net = get_icon_str(&cfg_icons, cat_sb, "net", if use_nerd_fonts { "\u{f0499}" } else { "📦" });
-    let icon_sb_nonet = get_icon_str(&cfg_icons, cat_sb, "no_net", if use_nerd_fonts { "\u{f0d34}" } else { "📦🔒" });
-    let icon_sb_off = get_icon_str(&cfg_icons, cat_sb, "off", if use_nerd_fonts { "\u{f099c}" } else { "🚫" });
+    let icon_sb_net = get_icon_str(&cfg_icons, &cfg.icons, cat_sb, "net", if use_ascii { "" } else if use_nerd_fonts { "\u{f0499}" } else { "📦" });
+    let icon_sb_nonet = get_icon_str(&cfg_icons, &cfg.icons, cat_sb, "no_net", if use_ascii { "[LOCKED]" } else if use_nerd_fonts { "\u{f0d34}" } else { "📦🔒" });
+    let icon_sb_off = get_icon_str(&cfg_icons, &cfg.icons, cat_sb, "off", if use_ascii { "" } else if use_nerd_fonts { "\u{f099c}" } else { "🚫" });
 
-    let icon_cycle_accept = get_icon_str(&cfg_icons, cat_cyc, "accept", if use_nerd_fonts { "\u{f012c}" } else { "✅" });
-    let icon_cycle_plan = get_icon_str(&cfg_icons, cat_cyc, "plan", if use_nerd_fonts { "\u{f0349}" } else { "🔍" });
+    let icon_cycle_accept = get_icon_str(&cfg_icons, &cfg.icons, cat_cyc, "accept", if use_ascii { "[OK]" } else if use_nerd_fonts { "\u{f012c}" } else { "✅" });
+    let icon_cycle_plan = get_icon_str(&cfg_icons, &cfg.icons, cat_cyc, "plan", if use_ascii { "[PLAN]" } else if use_nerd_fonts { "\u{f0349}" } else { "🔍" });
 
-    let icon_yolo = get_icon_str(&cfg_icons, cat_oth, "yolo", if use_nerd_fonts { "\u{f06d}" } else { "⚠" });
+    let icon_yolo = get_icon_str(&cfg_icons, &cfg.icons, cat_oth, "yolo", if use_ascii { "!" } else if use_nerd_fonts { "\u{f06d}" } else { "⚠" });
 
     let state_raw = data.agent_state.as_deref().unwrap_or("idle");
     let state_seg = match state_raw {
@@ -873,9 +930,9 @@ fn main() {
         &fg_yellow
     };
 
-    let bar_wide = make_bar(used_pct, 15, fill_color, &fg_gray, &reset);
-    let bar_med = make_bar(used_pct, 10, fill_color, &fg_gray, &reset);
-    let bar_narrow = make_bar(used_pct, 6, fill_color, &fg_gray, &reset);
+    let bar_wide = make_bar(used_pct, 15, fill_color, &fg_gray, &reset, use_ascii);
+    let bar_med = make_bar(used_pct, 10, fill_color, &fg_gray, &reset, use_ascii);
+    let bar_narrow = make_bar(used_pct, 6, fill_color, &fg_gray, &reset, use_ascii);
 
     let ctx_bar_wide = format!("{}{}{}  {}{}{:.1}%{}", fg_yellow, icon_ctx, reset, bar_wide, num_color, used_pct, reset);
     let ctx_bar_med = format!("{}{}{}  {}{}{:.1}%{}", fg_yellow, icon_ctx, reset, bar_med, num_color, used_pct, reset);
@@ -931,9 +988,9 @@ fn main() {
     let model_disp = if !model_name.is_empty() { model_name } else { model_id };
     let matched_quotas = match_quotas(&data, model_disp);
 
-    let quota_wide = format_quota(&matched_quotas, "wide", &icon_unknown, &fg_cyan, &fg_bright_cyan, &fg_bright_red, &fg_gray, &num_color, &reset);
-    let quota_med = format_quota(&matched_quotas, "med", &icon_unknown, &fg_cyan, &fg_bright_cyan, &fg_bright_red, &fg_gray, &num_color, &reset);
-    let quota_narrow = format_quota(&matched_quotas, "narrow", &icon_unknown, &fg_cyan, &fg_bright_cyan, &fg_bright_red, &fg_gray, &num_color, &reset);
+    let quota_wide = format_quota(&matched_quotas, "wide", &icon_unknown, &fg_cyan, &fg_bright_cyan, &fg_bright_red, &fg_gray, &num_color, &reset, use_ascii);
+    let quota_med = format_quota(&matched_quotas, "med", &icon_unknown, &fg_cyan, &fg_bright_cyan, &fg_bright_red, &fg_gray, &num_color, &reset, use_ascii);
+    let quota_narrow = format_quota(&matched_quotas, "narrow", &icon_unknown, &fg_cyan, &fg_bright_cyan, &fg_bright_red, &fg_gray, &num_color, &reset, use_ascii);
 
     let cycle_mode = data.cycle_mode.as_deref().unwrap_or("");
     let cycle_seg = match cycle_mode {
@@ -1117,8 +1174,26 @@ mod tests {
 
     #[test]
     fn test_make_bar() {
-        let bar = make_bar(100.0, 5, "", "", "");
+        let bar = make_bar(100.0, 5, "", "", "", false);
         assert_eq!(visible_len(&bar), 5);
+        let bar_ascii = make_bar(50.0, 6, "", "", "", true);
+        assert_eq!(visible_len(&bar_ascii), 8); // [===   ]
+        assert_eq!(bar_ascii, "[===   ]");
+    }
+
+    #[test]
+    fn test_unicode_width_visible_len() {
+        let emoji_str = "🟢 Ready";
+        // 🟢 has column width 2, " Ready" has width 6 => total width 8
+        assert_eq!(visible_len(emoji_str), 8);
+    }
+
+    #[test]
+    fn test_get_icon_str_flat_lookup() {
+        let active_icons: Option<serde_json::Value> = None;
+        let flat_icons: Option<serde_json::Value> = serde_json::from_str(r#"{"ready": "[READY]"}"#).ok();
+        let icon = get_icon_str(&active_icons, &flat_icons, "state", "ready", "*");
+        assert_eq!(icon, "[READY]");
     }
 
     #[test]
