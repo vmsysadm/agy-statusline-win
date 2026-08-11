@@ -1,0 +1,97 @@
+{
+  "colors": {
+    "reset": "\u001b[0m",
+    "bold": "\u001b[1m",
+    "dim": "\u001b[2m",
+    "italic": "\u001b[3m",
+    "foreground": {
+      "black": "#1e1e1e",
+      "red": "#e06c75",
+      "green": "#98c379",
+      "yellow": "#e5c07b",
+      "blue": "#61afef",
+      "magenta": "#c678dd",
+      "cyan": "#56b6c2",
+      "white": "#abb2bf",
+      "gray": "#5c6370",
+      "bright_red": "#be5046",
+      "bright_green": "#a3e635",
+      "bright_yellow": "#facc15",
+      "bright_blue": "#38bdf8",
+      "bright_magenta": "#c084fc",
+      "bright_cyan": "#22d3ee",
+      "bright_white": "#ffffff"
+    },
+    "ui": {
+      "number_highlight": "#ffffff\u001b[1m",
+      "separator": "#5c6370 | \u001b[0m",
+      "fallback_separator": "#5c6370 | \u001b[0m"
+    }
+  },
+  "icons": {
+    "nerd_fonts": {
+      "state": {
+        "ready": "*",
+        "thinking": "?",
+        "working": ">",
+        "tool": "=",
+        "unknown": "~"
+      },
+      "components": {
+        "folder": "DIR:",
+        "model": "MOD:",
+        "branch": "GIT:",
+        "conversation": "ID:",
+        "context": "CTX:",
+        "token": "TOK:",
+        "artifact": "ART:",
+        "subagent": "SUB:",
+        "background_task": "TASK:"
+      },
+      "sandbox": {
+        "net": "",
+        "no_net": "[LOCKED]",
+        "off": ""
+      },
+      "cycle": {
+        "accept": "[OK]",
+        "plan": "[PLAN]"
+      },
+      "other": {
+        "yolo": "!"
+      }
+    },
+    "emoji_fallback": {
+      "state": {
+        "ready": "*",
+        "thinking": "?",
+        "working": ">",
+        "tool": "=",
+        "unknown": "~"
+      },
+      "components": {
+        "folder": "DIR:",
+        "model": "MOD:",
+        "branch": "GIT:",
+        "conversation": "ID:",
+        "context": "CTX:",
+        "token": "TOK:",
+        "artifact": "ART:",
+        "subagent": "SUB:",
+        "background_task": "TASK:"
+      },
+      "sandbox": {
+        "net": "",
+        "no_net": "[LOCKED]",
+        "off": ""
+      },
+      "cycle": {
+        "accept": "[OK]",
+        "plan": "[PLAN]"
+      },
+      "other": {
+        "yolo": "!"
+      }
+    }
+  }
+}
