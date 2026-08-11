@@ -123,6 +123,8 @@ struct Config {
     yolo: Option<bool>,
     #[serde(default, alias = "use_ascii")]
     use_ascii: Option<bool>,
+    #[serde(default, alias = "use_nerd_fonts", alias = "useNerdFonts", alias = "nerd_fonts")]
+    use_nerd_fonts: Option<bool>,
 }
 
 fn convert_color_value(val: &str) -> String {
@@ -201,13 +203,17 @@ fn get_icon_str(
             }
         }
         if let Some(val) = raw_icons_cfg {
-            if let Some(cat) = val.get(category) {
-                if let Some(s) = cat.get(k).and_then(|v| v.as_str()) {
-                    return s.to_string();
+            if category != "nerd_fonts" && category != "emoji_fallback" && category != "ascii" {
+                if let Some(cat) = val.get(category) {
+                    if let Some(s) = cat.get(k).and_then(|v| v.as_str()) {
+                        return s.to_string();
+                    }
                 }
             }
-            if let Some(s) = val.get(k).and_then(|v| v.as_str()) {
-                return s.to_string();
+            if k != "nerd_fonts" && k != "emoji_fallback" && k != "ascii" {
+                if let Some(s) = val.get(k).and_then(|v| v.as_str()) {
+                    return s.to_string();
+                }
             }
         }
     }
@@ -813,12 +819,19 @@ fn render_statusline(
 
     let use_ascii = data.use_ascii.unwrap_or_else(|| {
         cfg.use_ascii.unwrap_or_else(|| {
-            let env_ascii = env::var("USE_ASCII").map(|v| v == "true" || v == "1").unwrap_or(false);
-            let mode_ascii = data.mode.as_deref().map(|m| m.eq_ignore_ascii_case("ascii")).unwrap_or(false);
-            let raw_ascii = raw_val.get("mode").and_then(|v| v.as_str()).map(|m| m.eq_ignore_ascii_case("ascii")).unwrap_or(false)
-                || raw_val.get("use_ascii").and_then(|v| v.as_bool()).unwrap_or(false)
-                || raw_val.get("useAscii").and_then(|v| v.as_bool()).unwrap_or(false);
-            env_ascii || mode_ascii || raw_ascii
+            if let Ok(v) = env::var("USE_ASCII") {
+                v == "true" || v == "1"
+            } else if let Ok(v) = env::var("USE_NERD_FONTS") {
+                v == "false" || v == "0"
+            } else if cfg.use_nerd_fonts.unwrap_or(false) {
+                false
+            } else {
+                let mode_ascii = data.mode.as_deref().map(|m| m.eq_ignore_ascii_case("ascii")).unwrap_or(false);
+                let raw_ascii = raw_val.get("mode").and_then(|v| v.as_str()).map(|m| m.eq_ignore_ascii_case("ascii")).unwrap_or(false)
+                    || raw_val.get("use_ascii").and_then(|v| v.as_bool()).unwrap_or(false)
+                    || raw_val.get("useAscii").and_then(|v| v.as_bool()).unwrap_or(false);
+                mode_ascii || raw_ascii || true
+            }
         })
     });
 
@@ -826,12 +839,16 @@ fn render_statusline(
         false
     } else {
         data.nerd_fonts_supported.unwrap_or_else(|| {
-            env::var("USE_NERD_FONTS").map(|v| v == "true" || v == "1").unwrap_or(false)
+            cfg.use_nerd_fonts.unwrap_or_else(|| {
+                env::var("USE_NERD_FONTS").map(|v| v != "false" && v != "0").unwrap_or(true)
+            })
         })
     };
 
     let cfg_icons = cfg.icons.as_ref().and_then(|i| {
-        if use_nerd_fonts {
+        if use_ascii {
+            i.get("ascii").cloned()
+        } else if use_nerd_fonts {
             i.get("nerd_fonts").cloned()
         } else {
             i.get("emoji_fallback").cloned()
@@ -851,7 +868,7 @@ fn render_statusline(
     let icon_unknown = get_icon_str(&cfg_icons, &cfg.icons, cat_state, "unknown", if use_ascii { "~" } else if use_nerd_fonts { "\u{f252}" } else { "⏳" });
 
     let icon_folder = get_icon_str(&cfg_icons, &cfg.icons, cat_comp, "folder", if use_ascii { "DIR:" } else if use_nerd_fonts { "\u{ea83}" } else { "📁" });
-    let icon_model = get_icon_str(&cfg_icons, &cfg.icons, cat_comp, "model", if use_ascii { "MOD:" } else if use_nerd_fonts { "\u{f400}" } else { "💡" });
+    let icon_model = get_icon_str(&cfg_icons, &cfg.icons, cat_comp, "model", if use_ascii { "" } else if use_nerd_fonts { "\u{f400}" } else { "💡" });
     let icon_branch = get_icon_str(&cfg_icons, &cfg.icons, cat_comp, "branch", if use_ascii { "GIT:" } else if use_nerd_fonts { "\u{f418}" } else { "⎇" });
     let icon_conv = get_icon_str(&cfg_icons, &cfg.icons, cat_comp, "conversation", if use_ascii { "ID:" } else if use_nerd_fonts { "\u{f036a}" } else { "💬" });
     let icon_ctx = get_icon_str(&cfg_icons, &cfg.icons, cat_comp, "context", if use_ascii { "CTX:" } else if use_nerd_fonts { "\u{f134f}" } else { "📊" });
@@ -903,18 +920,30 @@ fn render_statusline(
     };
 
     let m_wide = if !model_wide_str.is_empty() {
-        format!("{}{}{} {}{}", fg_bright_magenta, italic, icon_model, model_wide_str, reset)
+        if icon_model.is_empty() {
+            format!("{}{}{}{}", fg_bright_magenta, italic, model_wide_str, reset)
+        } else {
+            format!("{}{}{} {}{}", fg_bright_magenta, italic, icon_model, model_wide_str, reset)
+        }
     } else {
         String::new()
     };
     let m_med = if !model_med_str.is_empty() {
-        format!("{}{}{} {}{}", fg_bright_magenta, italic, icon_model, model_med_str, reset)
+        if icon_model.is_empty() {
+            format!("{}{}{}{}", fg_bright_magenta, italic, model_med_str, reset)
+        } else {
+            format!("{}{}{} {}{}", fg_bright_magenta, italic, icon_model, model_med_str, reset)
+        }
     } else {
         String::new()
     };
     let m_narrow = if !model_med_str.is_empty() {
         let len = model_med_str.chars().count().min(12);
-        format!("{}{}{} {}{}", fg_bright_magenta, italic, icon_model, &model_med_str[..len], reset)
+        if icon_model.is_empty() {
+            format!("{}{}{}{}", fg_bright_magenta, italic, &model_med_str[..len], reset)
+        } else {
+            format!("{}{}{} {}{}", fg_bright_magenta, italic, icon_model, &model_med_str[..len], reset)
+        }
     } else {
         String::new()
     };
@@ -982,9 +1011,9 @@ fn render_statusline(
     let bar_med = make_bar(used_pct, 10, fill_color, &fg_gray, &reset, use_ascii);
     let bar_narrow = make_bar(used_pct, 6, fill_color, &fg_gray, &reset, use_ascii);
 
-    let ctx_bar_wide = format!("{}{}{}  {}{}{:.1}%{}", fg_yellow, icon_ctx, reset, bar_wide, num_color, used_pct, reset);
-    let ctx_bar_med = format!("{}{}{}  {}{}{:.1}%{}", fg_yellow, icon_ctx, reset, bar_med, num_color, used_pct, reset);
-    let ctx_bar_narrow = format!("{}{}{}  {}{}{}%{}", fg_yellow, icon_ctx, reset, bar_narrow, num_color, pct_int, reset);
+    let ctx_bar_wide = format!("{}{}{} {}{}{:.1}%{}", fg_yellow, icon_ctx, reset, bar_wide, num_color, used_pct, reset);
+    let ctx_bar_med = format!("{}{}{} {}{}{:.1}%{}", fg_yellow, icon_ctx, reset, bar_med, num_color, used_pct, reset);
+    let ctx_bar_narrow = format!("{}{}{} {}{}{}%{}", fg_yellow, icon_ctx, reset, bar_narrow, num_color, pct_int, reset);
 
     let in_tok = ctx.total_input_tokens.unwrap_or(0);
     let out_tok = ctx.total_output_tokens.unwrap_or(0);
