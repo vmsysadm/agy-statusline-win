@@ -252,6 +252,40 @@ fn visible_len(s: &str) -> usize {
     UnicodeWidthStr::width(clean.as_str())
 }
 
+fn truncate_to_visible_width(s: &str, max_width: usize) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut cur_width = 0;
+    let mut in_esc = false;
+    let mut esc_buf = String::new();
+
+    for c in s.chars() {
+        if c == '\x1b' {
+            in_esc = true;
+            esc_buf.push(c);
+            continue;
+        }
+        if in_esc {
+            esc_buf.push(c);
+            if c == 'm' {
+                in_esc = false;
+                out.push_str(&esc_buf);
+                esc_buf.clear();
+            }
+            continue;
+        }
+
+        let w = unicode_width::UnicodeWidthChar::width(c).unwrap_or(0);
+        if cur_width + w > max_width {
+            break;
+        }
+        out.push(c);
+        cur_width += w;
+    }
+
+    out.push_str("\x1b[0m");
+    out
+}
+
 fn format_human(num: u64) -> String {
     if num >= 1_000_000 {
         format!("{:.1}M", num as f64 / 1_000_000.0)
@@ -725,6 +759,19 @@ fn main() {
         }
     }
 
+    let output_lines = render_statusline(&data, &cfg, &raw_val, &home_path);
+
+    for line in output_lines {
+        println!("{}", line);
+    }
+}
+
+fn render_statusline(
+    data: &InputData,
+    cfg: &Config,
+    raw_val: &serde_json::Value,
+    home_path: &str,
+) -> Vec<String> {
     let reset = cfg.colors.as_ref().and_then(|c| c.reset.as_deref()).map(convert_color_value).unwrap_or_else(|| "\x1b[0m".to_string());
     let bold = cfg.colors.as_ref().and_then(|c| c.bold.as_deref()).map(convert_color_value).unwrap_or_else(|| "\x1b[1m".to_string());
     let _dim = cfg.colors.as_ref().and_then(|c| c.dim.as_deref()).map(convert_color_value).unwrap_or_else(|| "\x1b[2m".to_string());
@@ -873,21 +920,21 @@ fn main() {
     };
 
     let cwd = data.cwd.as_deref().unwrap_or("");
-    let cwd_wide_val = get_shortened_path(cwd, 25, &home_path);
+    let cwd_wide_val = get_shortened_path(cwd, 25, home_path);
     let dir_wide = if !cwd_wide_val.is_empty() {
         format!("{}{}{} {}{}", fg_cyan, icon_folder, reset, cwd_wide_val, reset)
     } else {
         String::new()
     };
 
-    let cwd_med_val = get_shortened_path(cwd, 15, &home_path);
+    let cwd_med_val = get_shortened_path(cwd, 15, home_path);
     let dir_med = if !cwd_med_val.is_empty() {
         format!("{}{}{} {}{}", fg_cyan, icon_folder, reset, cwd_med_val, reset)
     } else {
         String::new()
     };
 
-    let cwd_narrow_val = get_shortened_path(cwd, 0, &home_path);
+    let cwd_narrow_val = get_shortened_path(cwd, 0, home_path);
     let dir_narrow = if !cwd_narrow_val.is_empty() {
         format!("{}{}{} {}{}", fg_cyan, icon_folder, reset, cwd_narrow_val, reset)
     } else {
@@ -917,6 +964,7 @@ fn main() {
     let sandbox = data.sandbox.as_ref().unwrap_or(&sandbox_default);
     let sb_wide = format_sandbox(sandbox, "wide", &icon_sb_net, &icon_sb_nonet, &icon_sb_off, &fg_green, &fg_bright_green, &fg_red, &fg_bright_red, &bold, &reset);
     let sb_med = format_sandbox(sandbox, "med", &icon_sb_net, &icon_sb_nonet, &icon_sb_off, &fg_green, &fg_bright_green, &fg_red, &fg_bright_red, &bold, &reset);
+    let sb_narrow = format_sandbox(sandbox, "narrow", &icon_sb_net, &icon_sb_nonet, &icon_sb_off, &fg_green, &fg_bright_green, &fg_red, &fg_bright_red, &bold, &reset);
 
     let ctx_default = ContextWindow::default();
     let ctx = data.context_window.as_ref().unwrap_or(&ctx_default);
@@ -986,7 +1034,7 @@ fn main() {
     let bg_narrow = format!("{}{}{}{}{}", fg_magenta, icon_bg, num_color, bg_tasks, reset);
 
     let model_disp = if !model_name.is_empty() { model_name } else { model_id };
-    let matched_quotas = match_quotas(&data, model_disp);
+    let matched_quotas = match_quotas(data, model_disp);
 
     let quota_wide = format_quota(&matched_quotas, "wide", &icon_unknown, &fg_cyan, &fg_bright_cyan, &fg_bright_red, &fg_gray, &num_color, &reset, use_ascii);
     let quota_med = format_quota(&matched_quotas, "med", &icon_unknown, &fg_cyan, &fg_bright_cyan, &fg_bright_red, &fg_gray, &num_color, &reset, use_ascii);
@@ -1003,7 +1051,7 @@ fn main() {
         || cfg.always_show_yolo.unwrap_or(false)
         || cfg.yolo.unwrap_or(false);
 
-    let data_yolo = detect_yolo_in_json(&raw_val)
+    let data_yolo = detect_yolo_in_json(raw_val)
         || check_process_cmdline_for_yolo()
         || data.yolo.unwrap_or(false)
         || data.is_yolo.unwrap_or(false)
@@ -1025,10 +1073,8 @@ fn main() {
     let line1_wide = join_with_dot(&[yolo_seg.clone(), state_seg.clone(), cycle_seg.clone(), m_wide.clone(), dir_wide.clone(), v_wide.clone(), conv_wide.clone()], &dot);
     let line2_wide = join_with_dot(&[art_wide.clone(), sub_wide.clone(), bg_wide.clone(), sb_wide.clone(), format!("{}{}", ctx_bar_wide, tok_details_wide), quota_wide.clone()], &dot);
 
-    let _line1_med = join_with_dot(&[yolo_seg.clone(), state_seg.clone(), cycle_seg.clone(), m_med.clone(), dir_med.clone(), v_med.clone()], &dot);
-    let _line2_med = join_with_dot(&[art_med.clone(), sub_med.clone(), bg_med.clone(), sb_med.clone(), format!("{}{}", ctx_bar_med, tok_details_med), quota_med.clone()], &dot);
-
     let cols = data.terminal_width.unwrap_or(80);
+    let target_cols = cols.saturating_sub(2);
     let margin = 8;
 
     let len1_wide = visible_len(&line1_wide);
@@ -1036,56 +1082,125 @@ fn main() {
 
     let mut output_lines = Vec::new();
 
-    if cols >= 135 && cols >= (len1_wide + len2_wide + margin) {
-        output_lines.push(print_right_aligned(&line1_wide, &line2_wide, cols));
-    } else if cols >= 100 {
-        let r1_left = join_with_dot(&[yolo_seg.clone(), state_seg.clone(), cycle_seg.clone(), m_wide.clone()], &dot);
-        let r1_right = join_with_dot(&[art_wide.clone(), sub_wide.clone(), bg_wide.clone(), sb_wide.clone()], &dot);
-        let r2_left = join_with_dot(&[dir_wide.clone(), v_wide.clone(), conv_wide.clone()], &dot);
-        let r2_right = join_with_dot(&[format!("{}{}", ctx_bar_wide, tok_details_wide), quota_wide.clone()], &dot);
-
-        output_lines.push(print_right_aligned(&r1_left, &r1_right, cols));
-        output_lines.push(print_right_aligned(&r2_left, &r2_right, cols));
-    } else if cols >= 75 {
-        let r1_left = join_with_dot(&[yolo_seg.clone(), state_seg.clone(), cycle_seg.clone(), m_med.clone()], &dot);
-        let r1_right = join_with_dot(&[art_med.clone(), sub_med.clone(), bg_med.clone(), sb_med.clone()], &dot);
-        let r2_left = join_with_dot(&[dir_med.clone(), v_med.clone(), conv_med.clone()], &dot);
-        let r2_right = join_with_dot(&[format!("{}{}", ctx_bar_med, tok_details_med), quota_med.clone()], &dot);
-
-        output_lines.push(print_right_aligned(&r1_left, &r1_right, cols));
-        output_lines.push(print_right_aligned(&r2_left, &r2_right, cols));
-    } else if cols >= 50 {
-        let r1_left = join_with_dot(&[yolo_seg.clone(), state_seg.clone(), cycle_seg.clone(), m_narrow.clone()], &dot);
-        let r1_right = join_with_space(&[art_narrow.clone(), sub_narrow.clone(), bg_narrow.clone()]);
-        let r2_left = join_with_dot(&[dir_narrow.clone(), v_narrow.clone()], &dot);
-        let r2_right = join_with_dot(&[ctx_bar_narrow.clone(), quota_narrow.clone()], &dot);
-
-        output_lines.push(print_right_aligned(&r1_left, &r1_right, cols));
-        output_lines.push(print_right_aligned(&r2_left, &r2_right, cols));
-    } else {
-        let yolo_short = if !yolo_seg.is_empty() {
-            format!("{} ╱ ", yolo_seg)
-        } else {
-            String::new()
-        };
-        let cyc_short = if !cycle_seg.is_empty() {
-            format!(" {} ╱ {}", fg_gray, cycle_seg)
-        } else {
-            String::new()
-        };
-        let m_short = if !model_short.is_empty() {
-            let len = model_short.chars().count().min(8);
-            format!(" {} ╱ {}{}{}", fg_gray, fg_bright_magenta, &model_short[..len], reset)
-        } else {
-            String::new()
-        };
-        output_lines.push(format!("{}{}{}{}", yolo_short, state_seg, cyc_short, m_short));
-        output_lines.push(ctx_bar_narrow);
+    if cols >= 135 && target_cols >= (len1_wide + len2_wide + margin) {
+        let single_line = print_right_aligned(&line1_wide, &line2_wide, target_cols);
+        if visible_len(&single_line) <= target_cols {
+            output_lines.push(single_line);
+        }
     }
 
-    for line in output_lines {
-        println!("{}", line);
+    if output_lines.is_empty() {
+        let r1_candidates = vec![
+            (
+                join_with_dot(&[yolo_seg.clone(), state_seg.clone(), cycle_seg.clone(), m_wide.clone()], &dot),
+                join_with_dot(&[art_wide.clone(), sub_wide.clone(), bg_wide.clone(), sb_wide.clone()], &dot),
+            ),
+            (
+                join_with_dot(&[yolo_seg.clone(), state_seg.clone(), cycle_seg.clone(), m_wide.clone()], &dot),
+                join_with_dot(&[art_med.clone(), sub_med.clone(), bg_med.clone(), sb_med.clone()], &dot),
+            ),
+            (
+                join_with_dot(&[yolo_seg.clone(), state_seg.clone(), cycle_seg.clone(), m_med.clone()], &dot),
+                join_with_dot(&[art_med.clone(), sub_med.clone(), bg_med.clone(), sb_med.clone()], &dot),
+            ),
+            (
+                join_with_dot(&[yolo_seg.clone(), state_seg.clone(), cycle_seg.clone(), m_med.clone()], &dot),
+                join_with_space(&[art_narrow.clone(), sub_narrow.clone(), bg_narrow.clone(), sb_narrow.clone()]),
+            ),
+            (
+                join_with_dot(&[yolo_seg.clone(), state_seg.clone(), cycle_seg.clone(), m_narrow.clone()], &dot),
+                join_with_space(&[art_narrow.clone(), sub_narrow.clone(), bg_narrow.clone()]),
+            ),
+            (
+                join_with_dot(&[yolo_seg.clone(), state_seg.clone(), cycle_seg.clone(), m_narrow.clone()], &dot),
+                String::new(),
+            ),
+            (
+                join_with_dot(&[yolo_seg.clone(), state_seg.clone(), cycle_seg.clone()], &dot),
+                String::new(),
+            ),
+        ];
+
+        let (r1_left, r1_right) = r1_candidates
+            .iter()
+            .find(|(l, r)| {
+                let l_vis = visible_len(l);
+                let r_vis = visible_len(r);
+                let req_len = if r_vis == 0 { l_vis } else { l_vis + 1 + r_vis };
+                req_len <= target_cols
+            })
+            .cloned()
+            .unwrap_or_else(|| r1_candidates.last().unwrap().clone());
+
+        let mut line1_str = print_right_aligned(&r1_left, &r1_right, target_cols);
+        if visible_len(&line1_str) > target_cols {
+            line1_str = truncate_to_visible_width(&line1_str, target_cols);
+        }
+
+        let r2_candidates = vec![
+            (
+                join_with_dot(&[dir_wide.clone(), v_wide.clone(), conv_wide.clone()], &dot),
+                join_with_dot(&[format!("{}{}", ctx_bar_wide, tok_details_wide), quota_wide.clone()], &dot),
+            ),
+            (
+                join_with_dot(&[dir_wide.clone(), v_wide.clone(), conv_wide.clone()], &dot),
+                join_with_dot(&[format!("{}{}", ctx_bar_wide, tok_details_med), quota_wide.clone()], &dot),
+            ),
+            (
+                join_with_dot(&[dir_wide.clone(), v_wide.clone(), conv_wide.clone()], &dot),
+                join_with_dot(&[format!("{}{}", ctx_bar_med, tok_details_med), quota_med.clone()], &dot),
+            ),
+            (
+                join_with_dot(&[dir_med.clone(), v_med.clone(), conv_med.clone()], &dot),
+                join_with_dot(&[format!("{}{}", ctx_bar_med, tok_details_med), quota_med.clone()], &dot),
+            ),
+            (
+                join_with_dot(&[dir_med.clone(), v_med.clone(), conv_med.clone()], &dot),
+                join_with_dot(&[ctx_bar_med.clone(), quota_med.clone()], &dot),
+            ),
+            (
+                join_with_dot(&[dir_narrow.clone(), v_narrow.clone()], &dot),
+                join_with_dot(&[ctx_bar_med.clone(), quota_med.clone()], &dot),
+            ),
+            (
+                join_with_dot(&[dir_narrow.clone(), v_narrow.clone()], &dot),
+                join_with_dot(&[ctx_bar_narrow.clone(), quota_narrow.clone()], &dot),
+            ),
+            (
+                join_with_dot(&[dir_narrow.clone()], &dot),
+                join_with_dot(&[ctx_bar_narrow.clone(), quota_narrow.clone()], &dot),
+            ),
+            (
+                join_with_dot(&[dir_narrow.clone()], &dot),
+                ctx_bar_narrow.clone(),
+            ),
+            (
+                String::new(),
+                ctx_bar_narrow.clone(),
+            ),
+        ];
+
+        let (r2_left, r2_right) = r2_candidates
+            .iter()
+            .find(|(l, r)| {
+                let l_vis = visible_len(l);
+                let r_vis = visible_len(r);
+                let req_len = if r_vis == 0 { l_vis } else { l_vis + 1 + r_vis };
+                req_len <= target_cols
+            })
+            .cloned()
+            .unwrap_or_else(|| r2_candidates.last().unwrap().clone());
+
+        let mut line2_str = print_right_aligned(&r2_left, &r2_right, target_cols);
+        if visible_len(&line2_str) > target_cols {
+            line2_str = truncate_to_visible_width(&line2_str, target_cols);
+        }
+
+        output_lines.push(line1_str);
+        output_lines.push(line2_str);
     }
+
+    output_lines
 }
 
 #[cfg(test)]
@@ -1202,6 +1317,62 @@ mod tests {
             get_shortened_path("/home/user/project", 20, "/home/user"),
             "~/project"
         );
+    }
+
+    #[test]
+    fn test_truncate_to_visible_width() {
+        let text = "\x1b[31mHello World\x1b[0m";
+        let truncated = truncate_to_visible_width(text, 5);
+        assert_eq!(visible_len(&truncated), 5);
+
+        let ascii_text = "Standard Text";
+        let truncated_ascii = truncate_to_visible_width(ascii_text, 8);
+        assert_eq!(visible_len(&truncated_ascii), 8);
+    }
+
+    #[test]
+    fn test_dynamic_line_width_truncation_across_widths() {
+        let widths = [80, 100, 115, 135, 160];
+        let cfg = Config::default();
+        let raw_val = serde_json::json!({
+            "agent_state": "working",
+            "cwd": "C:\\Users\\billy\\code\\project",
+            "conversation_id": "1234567890abcdef",
+            "context_window": {
+                "used_percentage": 45.5,
+                "total_input_tokens": 45000,
+                "total_output_tokens": 10000,
+                "context_window_size": 1000000
+            },
+            "artifact_count": 3,
+            "task_count": 1,
+            "subagents": 2,
+            "model": {
+                "id": "gemini-1.5-pro",
+                "effort": "high"
+            }
+        });
+
+        for &cols in &widths {
+            let mut data: InputData = serde_json::from_value(raw_val.clone()).unwrap();
+            data.terminal_width = Some(cols);
+
+            let lines = render_statusline(&data, &cfg, &raw_val, "C:\\Users\\billy");
+            assert!(!lines.is_empty());
+            assert!(lines.len() <= 2);
+
+            let target_cols = cols.saturating_sub(2);
+            for line in &lines {
+                let vis = visible_len(line);
+                assert!(
+                    vis <= target_cols,
+                    "Line visible width {} exceeds target_cols {} at total width {}",
+                    vis,
+                    target_cols,
+                    cols
+                );
+            }
+        }
     }
 }
 
