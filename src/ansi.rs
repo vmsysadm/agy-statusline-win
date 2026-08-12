@@ -1,44 +1,36 @@
-use unicode_width::UnicodeWidthStr;
-
 /// Convert hex color codes (#RRGGBB or #RGB) in a string to ANSI escape sequences.
 pub(crate) fn convert_color_value(val: &str) -> String {
     if val.is_empty() {
         return val.to_string();
     }
     let mut result = String::with_capacity(val.len() * 2);
-    let chars: Vec<char> = val.chars().collect();
+    let bytes = val.as_bytes();
     let mut i = 0;
 
-    while i < chars.len() {
-        if chars[i] == '#' {
-            if i + 6 < chars.len() && chars[i + 1..=i + 6].iter().all(|c| c.is_ascii_hexdigit()) {
-                let hex: String = chars[i + 1..=i + 6].iter().collect();
+    while i < bytes.len() {
+        if bytes[i] == b'#' {
+            if i + 6 < bytes.len() && bytes[i + 1..=i + 6].iter().all(|b| b.is_ascii_hexdigit()) {
                 if let (Ok(r), Ok(g), Ok(b)) = (
-                    u8::from_str_radix(&hex[0..2], 16),
-                    u8::from_str_radix(&hex[2..4], 16),
-                    u8::from_str_radix(&hex[4..6], 16),
+                    u8::from_str_radix(&val[i + 1..i + 3], 16),
+                    u8::from_str_radix(&val[i + 3..i + 5], 16),
+                    u8::from_str_radix(&val[i + 5..i + 7], 16),
                 ) {
-                    result.push_str(&format!("\x1b[38;2;{};{};{}m", r, g, b));
+                    use std::fmt::Write;
+                    let _ = write!(result, "\x1b[38;2;{};{};{}m", r, g, b);
                     i += 7;
                     continue;
                 }
-            } else if i + 3 < chars.len() && chars[i + 1..=i + 3].iter().all(|c| c.is_ascii_hexdigit()) {
-                let hex: String = chars[i + 1..=i + 3].iter().collect();
-                let r_str = format!("{}{}", &hex[0..1], &hex[0..1]);
-                let g_str = format!("{}{}", &hex[1..2], &hex[1..2]);
-                let b_str = format!("{}{}", &hex[2..3], &hex[2..3]);
-                if let (Ok(r), Ok(g), Ok(b)) = (
-                    u8::from_str_radix(&r_str, 16),
-                    u8::from_str_radix(&g_str, 16),
-                    u8::from_str_radix(&b_str, 16),
-                ) {
-                    result.push_str(&format!("\x1b[38;2;{};{};{}m", r, g, b));
-                    i += 4;
-                    continue;
-                }
+            } else if i + 3 < bytes.len() && bytes[i + 1..=i + 3].iter().all(|b| b.is_ascii_hexdigit()) {
+                let r_val = u8::from_str_radix(&val[i + 1..i + 2], 16).unwrap_or(0) * 17;
+                let g_val = u8::from_str_radix(&val[i + 2..i + 3], 16).unwrap_or(0) * 17;
+                let b_val = u8::from_str_radix(&val[i + 3..i + 4], 16).unwrap_or(0) * 17;
+                use std::fmt::Write;
+                let _ = write!(result, "\x1b[38;2;{};{};{}m", r_val, g_val, b_val);
+                i += 4;
+                continue;
             }
         }
-        result.push(chars[i]);
+        result.push(bytes[i] as char);
         i += 1;
     }
 
@@ -46,6 +38,7 @@ pub(crate) fn convert_color_value(val: &str) -> String {
 }
 
 /// Remove ANSI escape sequences from a string.
+#[allow(dead_code)]
 pub(crate) fn strip_ansi(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut in_esc = false;
@@ -63,10 +56,23 @@ pub(crate) fn strip_ansi(s: &str) -> String {
     out
 }
 
-/// Get the visible column width of a string (ANSI codes excluded).
+/// Get the visible column width of a string (ANSI codes excluded) without heap allocation.
 pub(crate) fn visible_len(s: &str) -> usize {
-    let clean = strip_ansi(s);
-    UnicodeWidthStr::width(clean.as_str())
+    use unicode_width::UnicodeWidthChar;
+    let mut width = 0;
+    let mut in_esc = false;
+    for c in s.chars() {
+        if c == '\x1b' {
+            in_esc = true;
+        } else if in_esc {
+            if c == 'm' {
+                in_esc = false;
+            }
+        } else {
+            width += UnicodeWidthChar::width(c).unwrap_or(0);
+        }
+    }
+    width
 }
 
 /// Truncate a string to a maximum visible width. Keep ANSI codes intact.

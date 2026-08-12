@@ -1,23 +1,33 @@
+#[inline]
+fn contains_ignore_ascii_case(haystack: &str, needle: &str) -> bool {
+    if needle.len() > haystack.len() {
+        return false;
+    }
+    haystack.as_bytes().windows(needle.len()).any(|w| w.eq_ignore_ascii_case(needle.as_bytes()))
+}
+
 /// Recursively search a JSON value for YOLO / auto-approve signals.
 pub(crate) fn detect_yolo_in_json(v: &serde_json::Value) -> bool {
     match v {
         serde_json::Value::Object(map) => {
             for (key, val) in map {
-                let k_lower = key.to_lowercase();
-
-                if k_lower == "sandbox" || k_lower == "cwd" || k_lower == "conversation_id" || k_lower == "conversationid" {
+                if key.eq_ignore_ascii_case("sandbox")
+                    || key.eq_ignore_ascii_case("cwd")
+                    || key.eq_ignore_ascii_case("conversation_id")
+                    || key.eq_ignore_ascii_case("conversationid")
+                {
                     continue;
                 }
 
-                let is_yolo_key = k_lower.contains("yolo")
-                    || k_lower.contains("dangerously")
-                    || k_lower.contains("skippermission")
-                    || k_lower.contains("skip_permission")
-                    || k_lower.contains("autoapprove")
-                    || k_lower.contains("auto_approve")
-                    || k_lower.contains("approval")
-                    || k_lower.contains("permission")
-                    || k_lower == "mode";
+                let is_yolo_key = contains_ignore_ascii_case(key, "yolo")
+                    || contains_ignore_ascii_case(key, "dangerously")
+                    || contains_ignore_ascii_case(key, "skippermission")
+                    || contains_ignore_ascii_case(key, "skip_permission")
+                    || contains_ignore_ascii_case(key, "autoapprove")
+                    || contains_ignore_ascii_case(key, "auto_approve")
+                    || contains_ignore_ascii_case(key, "approval")
+                    || contains_ignore_ascii_case(key, "permission")
+                    || key.eq_ignore_ascii_case("mode");
 
                 if is_yolo_key {
                     match val {
@@ -27,14 +37,13 @@ pub(crate) fn detect_yolo_in_json(v: &serde_json::Value) -> bool {
                             }
                         }
                         serde_json::Value::String(s) => {
-                            let s_lower = s.to_lowercase();
-                            if s_lower == "yolo"
-                                || s_lower == "auto_approve"
-                                || s_lower == "auto-approve"
-                                || s_lower == "autoapprove"
-                                || s_lower == "skip"
-                                || s_lower == "true"
-                                || s_lower == "enabled"
+                            if s.eq_ignore_ascii_case("yolo")
+                                || s.eq_ignore_ascii_case("auto_approve")
+                                || s.eq_ignore_ascii_case("auto-approve")
+                                || s.eq_ignore_ascii_case("autoapprove")
+                                || s.eq_ignore_ascii_case("skip")
+                                || s.eq_ignore_ascii_case("true")
+                                || s.eq_ignore_ascii_case("enabled")
                             {
                                 return true;
                             }
@@ -42,8 +51,10 @@ pub(crate) fn detect_yolo_in_json(v: &serde_json::Value) -> bool {
                         _ => {}
                     }
                 } else if let serde_json::Value::String(s) = val {
-                    let s_lower = s.to_lowercase();
-                    if s_lower == "yolo" || s_lower == "auto_approve" || s_lower == "auto-approve" {
+                    if s.eq_ignore_ascii_case("yolo")
+                        || s.eq_ignore_ascii_case("auto_approve")
+                        || s.eq_ignore_ascii_case("auto-approve")
+                    {
                         return true;
                     }
                 }
@@ -57,8 +68,10 @@ pub(crate) fn detect_yolo_in_json(v: &serde_json::Value) -> bool {
         serde_json::Value::Array(arr) => {
             for item in arr {
                 if let serde_json::Value::String(s) = item {
-                    let s_lower = s.to_lowercase();
-                    if s_lower.contains("dangerously") || s_lower.contains("yolo") || s_lower.contains("skip_permission") {
+                    if contains_ignore_ascii_case(s, "dangerously")
+                        || contains_ignore_ascii_case(s, "yolo")
+                        || contains_ignore_ascii_case(s, "skip_permission")
+                    {
                         return true;
                     }
                 }
@@ -74,8 +87,8 @@ pub(crate) fn detect_yolo_in_json(v: &serde_json::Value) -> bool {
 
 /// Check the parent process chain for YOLO flags.
 ///
-/// On Windows this walks up the parent process tree using the ToolHelp API
-/// and reads each parent's command line via NtQueryInformationProcess.
+/// On Windows this walks up the parent process tree directly using
+/// NtQueryInformationProcess (without snapshotting all OS processes).
 /// On other platforms it only checks the AGY_YOLO environment variable.
 #[cfg(windows)]
 pub(crate) fn check_parent_cmdline_for_yolo() -> bool {
@@ -101,62 +114,20 @@ pub(crate) fn check_parent_cmdline_for_yolo() -> bool {
 
 #[cfg(windows)]
 unsafe fn walk_parent_chain_for_yolo() -> bool {
-    use std::collections::HashMap;
-    use std::mem;
-    use windows_sys::Win32::Foundation::*;
-    use windows_sys::Win32::System::Diagnostics::ToolHelp::*;
-
-    let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    if snapshot == INVALID_HANDLE_VALUE {
-        return false;
-    }
-
-    // Build a PID -> (parent_pid, exe_name) map from the process snapshot
-    let mut process_map: HashMap<u32, (u32, String)> = HashMap::new();
-    let mut entry: PROCESSENTRY32W = mem::zeroed();
-    entry.dwSize = mem::size_of::<PROCESSENTRY32W>() as u32;
-
-    if Process32FirstW(snapshot, &mut entry) != 0 {
-        loop {
-            let name_len = entry
-                .szExeFile
-                .iter()
-                .position(|&c| c == 0)
-                .unwrap_or(entry.szExeFile.len());
-            let exe_name =
-                String::from_utf16_lossy(&entry.szExeFile[..name_len]).to_lowercase();
-            process_map.insert(
-                entry.th32ProcessID,
-                (entry.th32ParentProcessID, exe_name),
-            );
-            if Process32NextW(snapshot, &mut entry) == 0 {
-                break;
-            }
-        }
-    }
-    let _ = CloseHandle(snapshot);
-
-    // Walk up the parent chain from the current PID (max 10 levels)
     let mut current_pid = std::process::id();
+
     for _ in 0..10 {
-        let (parent_pid, exe_name) = match process_map.get(&current_pid) {
-            Some(info) => info.clone(),
+        let (parent_pid, cmdline) = match read_process_info(current_pid) {
+            Some(info) => info,
             None => break,
         };
 
-        // Only inspect processes that look like the Antigravity CLI
-        if exe_name.contains("node")
-            || exe_name.contains("agy")
-            || exe_name.contains("antigravity")
-        {
-            if let Some(cmdline) = read_process_command_line(current_pid) {
-                let lower = cmdline.to_lowercase();
-                if lower.contains("dangerously")
-                    || lower.contains("skip-permissions")
-                    || lower.contains("skippermissions")
-                {
-                    return true;
-                }
+        if let Some(cmd) = cmdline {
+            if contains_ignore_ascii_case(&cmd, "dangerously")
+                || contains_ignore_ascii_case(&cmd, "skip-permissions")
+                || contains_ignore_ascii_case(&cmd, "skippermissions")
+            {
+                return true;
             }
         }
 
@@ -168,9 +139,9 @@ unsafe fn walk_parent_chain_for_yolo() -> bool {
     false
 }
 
-/// Read a remote process's command line via NtQueryInformationProcess + ReadProcessMemory.
+/// Read a remote process's parent PID and command line via NtQueryInformationProcess + ReadProcessMemory.
 #[cfg(windows)]
-unsafe fn read_process_command_line(pid: u32) -> Option<String> {
+unsafe fn read_process_info(pid: u32) -> Option<(u32, Option<String>)> {
     use std::ffi::c_void;
     use std::mem;
     use windows_sys::Win32::Foundation::*;
@@ -178,24 +149,26 @@ unsafe fn read_process_command_line(pid: u32) -> Option<String> {
     use windows_sys::Win32::System::LibraryLoader::{GetModuleHandleA, GetProcAddress};
     use windows_sys::Win32::System::Threading::*;
 
-    // NtQueryInformationProcess function pointer type
     type NtQueryFn = unsafe extern "system" fn(
-        HANDLE,  // ProcessHandle
-        u32,     // ProcessInformationClass
-        *mut c_void, // ProcessInformation
-        u32,     // ProcessInformationLength
-        *mut u32, // ReturnLength
+        HANDLE,
+        u32,
+        *mut c_void,
+        u32,
+        *mut u32,
     ) -> i32;
 
     const PROCESS_BASIC_INFORMATION_CLASS: u32 = 0;
 
     #[repr(C)]
     struct ProcessBasicInformation {
-        _reserved1: *mut c_void,
+        _exit_status: i32,
+        _pad0: i32,
         peb_base_address: *mut c_void,
-        _reserved2: [*mut c_void; 2],
+        _affinity_mask: usize,
+        _base_priority: i32,
+        _pad1: i32,
         _unique_process_id: usize,
-        _reserved3: *mut c_void,
+        inherited_from_unique_process_id: usize,
     }
 
     #[repr(C)]
@@ -205,7 +178,6 @@ unsafe fn read_process_command_line(pid: u32) -> Option<String> {
         buffer: *mut u16,
     }
 
-    // Load NtQueryInformationProcess from ntdll.dll
     let ntdll = GetModuleHandleA(b"ntdll.dll\0".as_ptr());
     if ntdll.is_null() {
         return None;
@@ -221,7 +193,6 @@ unsafe fn read_process_command_line(pid: u32) -> Option<String> {
         return None;
     }
 
-    // Get PEB address
     let mut pbi: ProcessBasicInformation = mem::zeroed();
     let status = nt_query(
         handle,
@@ -234,6 +205,8 @@ unsafe fn read_process_command_line(pid: u32) -> Option<String> {
         let _ = CloseHandle(handle);
         return None;
     }
+
+    let parent_pid = pbi.inherited_from_unique_process_id as u32;
 
     // Read ProcessParameters pointer from PEB (offset 0x20 on x64)
     let params_ptr_addr = (pbi.peb_base_address as usize + 0x20) as *const c_void;
@@ -249,7 +222,7 @@ unsafe fn read_process_command_line(pid: u32) -> Option<String> {
     );
     if ok == 0 || params_ptr.is_null() {
         let _ = CloseHandle(handle);
-        return None;
+        return Some((parent_pid, None));
     }
 
     // Read CommandLine UNICODE_STRING from RTL_USER_PROCESS_PARAMETERS (offset 0x70 on x64)
@@ -264,10 +237,9 @@ unsafe fn read_process_command_line(pid: u32) -> Option<String> {
     );
     if ok == 0 || cmdline_us.buffer.is_null() || cmdline_us.length == 0 {
         let _ = CloseHandle(handle);
-        return None;
+        return Some((parent_pid, None));
     }
 
-    // Read the actual command line string
     let char_count = (cmdline_us.length / 2) as usize;
     let mut buffer = vec![0u16; char_count];
     let ok = ReadProcessMemory(
@@ -280,10 +252,10 @@ unsafe fn read_process_command_line(pid: u32) -> Option<String> {
     let _ = CloseHandle(handle);
 
     if ok == 0 {
-        return None;
+        Some((parent_pid, None))
+    } else {
+        Some((parent_pid, Some(String::from_utf16_lossy(&buffer))))
     }
-
-    Some(String::from_utf16_lossy(&buffer))
 }
 
 #[cfg(test)]

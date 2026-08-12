@@ -6,13 +6,35 @@ use crate::theme::Theme;
 use crate::yolo;
 
 /// Join non-empty items with a separator.
-fn join_with_dot(items: &[String], dot: &str) -> String {
-    items.iter().filter(|s| !s.is_empty()).cloned().collect::<Vec<_>>().join(dot)
+fn join_with_dot(items: &[&str], dot: &str) -> String {
+    let mut result = String::new();
+    let mut first = true;
+    for &item in items {
+        if !item.is_empty() {
+            if !first {
+                result.push_str(dot);
+            }
+            result.push_str(item);
+            first = false;
+        }
+    }
+    result
 }
 
 /// Join non-empty items with double spaces.
-fn join_with_space(items: &[String]) -> String {
-    items.iter().filter(|s| !s.is_empty()).cloned().collect::<Vec<_>>().join("  ")
+fn join_with_space(items: &[&str]) -> String {
+    let mut result = String::new();
+    let mut first = true;
+    for &item in items {
+        if !item.is_empty() {
+            if !first {
+                result.push_str("  ");
+            }
+            result.push_str(item);
+            first = false;
+        }
+    }
+    result
 }
 
 /// Right-align two segments within a given column width.
@@ -26,7 +48,13 @@ fn print_right_aligned(left: &str, right: &str, total_cols: usize) -> String {
         1
     };
 
-    format!("{}{}{}", left, " ".repeat(pad), right)
+    let mut out = String::with_capacity(left.len() + pad + right.len());
+    out.push_str(left);
+    for _ in 0..pad {
+        out.push(' ');
+    }
+    out.push_str(right);
+    out
 }
 
 /// Build the final statusline output (1 or 2 lines).
@@ -52,8 +80,9 @@ pub(crate) fn render_statusline(
 
     let dot = &t.dot;
 
-    let line1_wide = join_with_dot(&[s.yolo_seg.clone(), s.state_seg.clone(), s.cycle_seg.clone(), s.m_wide.clone(), s.dir_wide.clone(), s.v_wide.clone(), s.conv_wide.clone()], dot);
-    let line2_wide = join_with_dot(&[s.art_wide.clone(), s.sub_wide.clone(), s.bg_wide.clone(), s.sb_wide.clone(), format!("{}{}", s.ctx_bar_wide, s.tok_details_wide), s.quota_wide.clone()], dot);
+    let line1_wide = join_with_dot(&[&s.yolo_seg, &s.state_seg, &s.cycle_seg, &s.m_wide, &s.dir_wide, &s.v_wide, &s.conv_wide], dot);
+    let ctx_tok_wide = format!("{}{}", s.ctx_bar_wide, s.tok_details_wide);
+    let line2_wide = join_with_dot(&[&s.art_wide, &s.sub_wide, &s.bg_wide, &s.sb_wide, &ctx_tok_wide, &s.quota_wide], dot);
 
     let cols = data.terminal_width.unwrap_or(80);
     let target_cols = cols.saturating_sub(2);
@@ -72,106 +101,111 @@ pub(crate) fn render_statusline(
     }
 
     if output_lines.is_empty() {
-        let r1_candidates = vec![
-            (
-                join_with_dot(&[s.yolo_seg.clone(), s.state_seg.clone(), s.cycle_seg.clone(), s.m_wide.clone()], dot),
-                join_with_dot(&[s.art_wide.clone(), s.sub_wide.clone(), s.bg_wide.clone(), s.sb_wide.clone()], dot),
-            ),
-            (
-                join_with_dot(&[s.yolo_seg.clone(), s.state_seg.clone(), s.cycle_seg.clone(), s.m_wide.clone()], dot),
-                join_with_dot(&[s.art_med.clone(), s.sub_med.clone(), s.bg_med.clone(), s.sb_med.clone()], dot),
-            ),
-            (
-                join_with_dot(&[s.yolo_seg.clone(), s.state_seg.clone(), s.cycle_seg.clone(), s.m_med.clone()], dot),
-                join_with_dot(&[s.art_med.clone(), s.sub_med.clone(), s.bg_med.clone(), s.sb_med.clone()], dot),
-            ),
-            (
-                join_with_dot(&[s.yolo_seg.clone(), s.state_seg.clone(), s.cycle_seg.clone(), s.m_med.clone()], dot),
-                join_with_space(&[s.art_narrow.clone(), s.sub_narrow.clone(), s.bg_narrow.clone(), s.sb_narrow.clone()]),
-            ),
-            (
-                join_with_dot(&[s.yolo_seg.clone(), s.state_seg.clone(), s.cycle_seg.clone(), s.m_narrow.clone()], dot),
-                join_with_space(&[s.art_narrow.clone(), s.sub_narrow.clone(), s.bg_narrow.clone()]),
-            ),
-            (
-                join_with_dot(&[s.yolo_seg.clone(), s.state_seg.clone(), s.cycle_seg.clone(), s.m_narrow.clone()], dot),
-                String::new(),
-            ),
-            (
-                join_with_dot(&[s.yolo_seg.clone(), s.state_seg.clone(), s.cycle_seg.clone()], dot),
-                String::new(),
-            ),
-        ];
+        let r1_candidate = |idx: usize| -> (String, String) {
+            match idx {
+                0 => (
+                    join_with_dot(&[&s.yolo_seg, &s.state_seg, &s.cycle_seg, &s.m_wide], dot),
+                    join_with_dot(&[&s.art_wide, &s.sub_wide, &s.bg_wide, &s.sb_wide], dot),
+                ),
+                1 => (
+                    join_with_dot(&[&s.yolo_seg, &s.state_seg, &s.cycle_seg, &s.m_wide], dot),
+                    join_with_dot(&[&s.art_med, &s.sub_med, &s.bg_med, &s.sb_med], dot),
+                ),
+                2 => (
+                    join_with_dot(&[&s.yolo_seg, &s.state_seg, &s.cycle_seg, &s.m_med], dot),
+                    join_with_dot(&[&s.art_med, &s.sub_med, &s.bg_med, &s.sb_med], dot),
+                ),
+                3 => (
+                    join_with_dot(&[&s.yolo_seg, &s.state_seg, &s.cycle_seg, &s.m_med], dot),
+                    join_with_space(&[&s.art_narrow, &s.sub_narrow, &s.bg_narrow, &s.sb_narrow]),
+                ),
+                4 => (
+                    join_with_dot(&[&s.yolo_seg, &s.state_seg, &s.cycle_seg, &s.m_narrow], dot),
+                    join_with_space(&[&s.art_narrow, &s.sub_narrow, &s.bg_narrow]),
+                ),
+                5 => (
+                    join_with_dot(&[&s.yolo_seg, &s.state_seg, &s.cycle_seg, &s.m_narrow], dot),
+                    String::new(),
+                ),
+                _ => (
+                    join_with_dot(&[&s.yolo_seg, &s.state_seg, &s.cycle_seg], dot),
+                    String::new(),
+                ),
+            }
+        };
 
-        let (r1_left, r1_right) = r1_candidates
-            .iter()
+        let (r1_left, r1_right) = (0..7)
+            .map(r1_candidate)
             .find(|(l, r)| {
                 let l_vis = visible_len(l);
                 let r_vis = visible_len(r);
                 let req_len = if r_vis == 0 { l_vis } else { l_vis + 1 + r_vis };
                 req_len <= target_cols
             })
-            .cloned()
-            .unwrap_or_else(|| r1_candidates.last().unwrap().clone());
+            .unwrap_or_else(|| r1_candidate(6));
 
         let mut line1_str = print_right_aligned(&r1_left, &r1_right, target_cols);
         if visible_len(&line1_str) > target_cols {
             line1_str = truncate_to_visible_width(&line1_str, target_cols);
         }
 
-        let r2_candidates = vec![
-            (
-                join_with_dot(&[s.dir_wide.clone(), s.v_wide.clone(), s.conv_wide.clone()], dot),
-                join_with_dot(&[format!("{}{}", s.ctx_bar_wide, s.tok_details_wide), s.quota_wide.clone()], dot),
-            ),
-            (
-                join_with_dot(&[s.dir_wide.clone(), s.v_wide.clone(), s.conv_wide.clone()], dot),
-                join_with_dot(&[format!("{}{}", s.ctx_bar_wide, s.tok_details_med), s.quota_wide.clone()], dot),
-            ),
-            (
-                join_with_dot(&[s.dir_wide.clone(), s.v_wide.clone(), s.conv_wide.clone()], dot),
-                join_with_dot(&[format!("{}{}", s.ctx_bar_med, s.tok_details_med), s.quota_med.clone()], dot),
-            ),
-            (
-                join_with_dot(&[s.dir_med.clone(), s.v_med.clone(), s.conv_med.clone()], dot),
-                join_with_dot(&[format!("{}{}", s.ctx_bar_med, s.tok_details_med), s.quota_med.clone()], dot),
-            ),
-            (
-                join_with_dot(&[s.dir_med.clone(), s.v_med.clone(), s.conv_med.clone()], dot),
-                join_with_dot(&[s.ctx_bar_med.clone(), s.quota_med.clone()], dot),
-            ),
-            (
-                join_with_dot(&[s.dir_narrow.clone(), s.v_narrow.clone()], dot),
-                join_with_dot(&[s.ctx_bar_med.clone(), s.quota_med.clone()], dot),
-            ),
-            (
-                join_with_dot(&[s.dir_narrow.clone(), s.v_narrow.clone()], dot),
-                join_with_dot(&[s.ctx_bar_narrow.clone(), s.quota_narrow.clone()], dot),
-            ),
-            (
-                join_with_dot(&[s.dir_narrow.clone()], dot),
-                join_with_dot(&[s.ctx_bar_narrow.clone(), s.quota_narrow.clone()], dot),
-            ),
-            (
-                join_with_dot(&[s.dir_narrow.clone()], dot),
-                s.ctx_bar_narrow.clone(),
-            ),
-            (
-                String::new(),
-                s.ctx_bar_narrow.clone(),
-            ),
-        ];
+        let ctx_tok_w_m = format!("{}{}", s.ctx_bar_wide, s.tok_details_med);
+        let ctx_tok_m_m = format!("{}{}", s.ctx_bar_med, s.tok_details_med);
 
-        let (r2_left, r2_right) = r2_candidates
-            .iter()
+        let r2_candidate = |idx: usize| -> (String, String) {
+            match idx {
+                0 => (
+                    join_with_dot(&[&s.dir_wide, &s.v_wide, &s.conv_wide], dot),
+                    join_with_dot(&[&ctx_tok_wide, &s.quota_wide], dot),
+                ),
+                1 => (
+                    join_with_dot(&[&s.dir_wide, &s.v_wide, &s.conv_wide], dot),
+                    join_with_dot(&[&ctx_tok_w_m, &s.quota_wide], dot),
+                ),
+                2 => (
+                    join_with_dot(&[&s.dir_wide, &s.v_wide, &s.conv_wide], dot),
+                    join_with_dot(&[&ctx_tok_m_m, &s.quota_med], dot),
+                ),
+                3 => (
+                    join_with_dot(&[&s.dir_med, &s.v_med, &s.conv_med], dot),
+                    join_with_dot(&[&ctx_tok_m_m, &s.quota_med], dot),
+                ),
+                4 => (
+                    join_with_dot(&[&s.dir_med, &s.v_med, &s.conv_med], dot),
+                    join_with_dot(&[&s.ctx_bar_med, &s.quota_med], dot),
+                ),
+                5 => (
+                    join_with_dot(&[&s.dir_narrow, &s.v_narrow], dot),
+                    join_with_dot(&[&s.ctx_bar_med, &s.quota_med], dot),
+                ),
+                6 => (
+                    join_with_dot(&[&s.dir_narrow, &s.v_narrow], dot),
+                    join_with_dot(&[&s.ctx_bar_narrow, &s.quota_narrow], dot),
+                ),
+                7 => (
+                    join_with_dot(&[&s.dir_narrow], dot),
+                    join_with_dot(&[&s.ctx_bar_narrow, &s.quota_narrow], dot),
+                ),
+                8 => (
+                    join_with_dot(&[&s.dir_narrow], dot),
+                    s.ctx_bar_narrow.clone(),
+                ),
+                _ => (
+                    String::new(),
+                    s.ctx_bar_narrow.clone(),
+                ),
+            }
+        };
+
+        let (r2_left, r2_right) = (0..10)
+            .map(r2_candidate)
             .find(|(l, r)| {
                 let l_vis = visible_len(l);
                 let r_vis = visible_len(r);
                 let req_len = if r_vis == 0 { l_vis } else { l_vis + 1 + r_vis };
                 req_len <= target_cols
             })
-            .cloned()
-            .unwrap_or_else(|| r2_candidates.last().unwrap().clone());
+            .unwrap_or_else(|| r2_candidate(9));
 
         let mut line2_str = print_right_aligned(&r2_left, &r2_right, target_cols);
         if visible_len(&line2_str) > target_cols {

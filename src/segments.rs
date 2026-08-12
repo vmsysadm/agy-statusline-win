@@ -109,7 +109,18 @@ pub(crate) fn make_bar(pct: f64, len: usize, fill_color: &str, fg_gray: &str, re
 
     if use_ascii {
         let empty = len.saturating_sub(filled);
-        format!("[{}{}{}{}]", fill_color, "=".repeat(filled), reset, " ".repeat(empty))
+        let mut bar = String::with_capacity(len + fill_color.len() + reset.len() + 2);
+        bar.push('[');
+        bar.push_str(fill_color);
+        for _ in 0..filled {
+            bar.push('=');
+        }
+        bar.push_str(reset);
+        for _ in 0..empty {
+            bar.push(' ');
+        }
+        bar.push(']');
+        bar
     } else {
         let remainder = ((pct_int * len as f64) % 100.0).floor() as usize;
 
@@ -118,20 +129,28 @@ pub(crate) fn make_bar(pct: f64, len: usize, fill_color: &str, fg_gray: &str, re
         let block_med = '\u{2592}';
         let block_light = '\u{2591}';
 
-        let mut bar = String::new();
+        let mut bar = String::with_capacity(len * 16);
         for i in 0..len {
             if i < filled {
-                bar.push_str(&format!("{}{}{}", fill_color, block_full, reset));
+                bar.push_str(fill_color);
+                bar.push(block_full);
+                bar.push_str(reset);
             } else if i == filled {
-                if remainder >= 75 {
-                    bar.push_str(&format!("{}{}{}{}", fill_color, block_dark, reset, fg_gray));
+                let partial_block = if remainder >= 75 {
+                    block_dark
                 } else if remainder >= 50 {
-                    bar.push_str(&format!("{}{}{}{}", fill_color, block_med, reset, fg_gray));
+                    block_med
                 } else {
-                    bar.push_str(&format!("{}{}{}{}", fill_color, block_light, reset, fg_gray));
-                }
+                    block_light
+                };
+                bar.push_str(fill_color);
+                bar.push(partial_block);
+                bar.push_str(reset);
+                bar.push_str(fg_gray);
             } else {
-                bar.push_str(&format!("{}{}{}", fg_gray, block_light, reset));
+                bar.push_str(fg_gray);
+                bar.push(block_light);
+                bar.push_str(reset);
             }
         }
         bar

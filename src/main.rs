@@ -7,7 +7,7 @@ mod theme;
 mod yolo;
 
 use std::env;
-use std::io::{self, Read};
+use std::io::{self, BufWriter, Read, Write};
 
 fn main() {
     let mut input = String::new();
@@ -26,7 +26,9 @@ fn main() {
 
     let output_lines = layout::render_statusline(&data, &cfg, yolo_from_json, raw_use_ascii, &home_path);
 
+    let stdout = io::stdout();
+    let mut handle = BufWriter::new(stdout.lock());
     for line in output_lines {
-        println!("{}", line);
+        let _ = writeln!(handle, "{}", line);
     }
 }
