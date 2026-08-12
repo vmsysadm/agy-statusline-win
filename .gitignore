@@ -1,10 +1,12 @@
 /target
 **/*.rs.bk
 *.pdb
-handoff.md
 *.tmp
 *.log
 .DS_Store
 Thumbs.db
 last_statusline_input.json
-PROBLEM_REPORT.md
+
+# Ignore all markdown files except README.md
+*.md
+!README.md
