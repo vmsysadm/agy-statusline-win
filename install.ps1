@@ -11,7 +11,7 @@ if (-not (Test-Path $targetDir)) {
 
 $binTarget = Join-Path $targetDir "agy-statusline.exe"
 $localBin = Join-Path $PSScriptRoot "target\release\agy-statusline.exe"
-$downloadUrl = "https://github.com/vmsysadm/agy-statusline-win/releases/download/v0.8.0/agy-statusline.exe"
+$downloadUrl = "https://github.com/vmsysadm/agy-statusline-win/releases/download/v0.8.1/agy-statusline.exe"
 
 $configSource = Join-Path $PSScriptRoot "statusline_config.json"
 $configTarget = Join-Path $targetDir "statusline_config.json"
