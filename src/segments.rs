@@ -105,7 +105,10 @@ pub(crate) fn format_sandbox(
 /// Build a progress bar string (unicode block or ASCII).
 pub(crate) fn make_bar(pct: f64, len: usize, fill_color: &str, fg_gray: &str, reset: &str, use_ascii: bool) -> String {
     let pct_int = pct.clamp(0.0, 100.0);
-    let filled = ((pct_int * len as f64) / 100.0).floor() as usize;
+    let mut filled = ((pct_int * len as f64) / 100.0).round() as usize;
+    if pct_int > 0.0 && filled == 0 {
+        filled = 1;
+    }
 
     if use_ascii {
         let empty = len.saturating_sub(filled);
@@ -640,6 +643,8 @@ mod tests {
         let bar_ascii = make_bar(50.0, 6, "", "", "", true);
         assert_eq!(visible_len(&bar_ascii), 8); // [===   ]
         assert_eq!(bar_ascii, "[===   ]");
+        let bar_ascii_low = make_bar(4.2, 15, "", "", "", true);
+        assert_eq!(bar_ascii_low, "[=              ]");
     }
 
     #[test]
