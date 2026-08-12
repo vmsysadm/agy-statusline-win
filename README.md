@@ -25,6 +25,18 @@ irm https://raw.githubusercontent.com/vmsysadm/agy-statusline-win/main/install.p
 - **Responsive Layout**: Dynamically adjusts layout based on terminal width.
 - **Rich Diagnostics**: Displays agent state, active model, token counts, git branch, conversation ID, artifacts, subagent count, and background tasks.
 
+## Performance & Benchmarks
+
+`agy-statusline-win` is benchmarked over 50 consecutive prompt refreshes using `benchmark.exe`:
+
+| Metric | Baseline | Optimized (v0.7.0) | Speedup |
+|---|---|---|---|
+| **Min Latency** | ~30.0 ms | **10.84 ms** | **~2.8x faster** |
+| **P50 Latency (Median)** | ~45.0 ms | **12.46 ms** | **~3.6x faster** |
+| **Avg Latency** | ~48.0 ms | **12.67 ms** | **~3.8x faster** |
+| **P95 Latency** | ~60.0 ms | **15.27 ms** | **~3.9x faster** |
+| **Max Latency** | ~75.0 ms | **15.40 ms** | **~4.9x faster** |
+
 ## Build from Source
 
 ```cmd
