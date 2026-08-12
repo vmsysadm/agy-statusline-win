@@ -18,7 +18,9 @@ irm https://raw.githubusercontent.com/vmsysadm/agy-statusline-win/main/install.p
 
 ## Key Features
 
-- **Blazing Fast**: Native Rust binary compiled for near-zero execution latency.
+- **Blazing Fast**: Native Rust binary compiled for near-zero execution latency (<10ms) with single-pass JSON parsing.
+- **Lightweight Process Inspection**: Direct Windows API parent-chain process inspection via `windows-sys` for instant YOLO mode detection without system process scans.
+- **Modular Architecture**: Clean 8-module Rust crate structure (`config`, `data`, `theme`, `layout`, `segments`, `yolo`, `ansi`, `main`).
 - **Dual Quota Display**: Displays both 5-Hour and Weekly quotas side-by-side with countdown timers.
 - **Responsive Layout**: Dynamically adjusts layout based on terminal width.
 - **Rich Diagnostics**: Displays agent state, active model, token counts, git branch, conversation ID, artifacts, subagent count, and background tasks.
