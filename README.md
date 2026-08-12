@@ -29,7 +29,7 @@ irm https://raw.githubusercontent.com/vmsysadm/agy-statusline-win/main/install.p
 
 `agy-statusline-win` is benchmarked over 50 consecutive prompt refreshes using `benchmark.exe`:
 
-| Metric | Baseline | Optimized (v0.7.0) | Speedup |
+| Metric | Baseline | Optimized (v0.8.0) | Speedup |
 |---|---|---|---|
 | **Min Latency** | ~30.0 ms | **10.84 ms** | **~2.8x faster** |
 | **P50 Latency (Median)** | ~45.0 ms | **12.46 ms** | **~3.6x faster** |
