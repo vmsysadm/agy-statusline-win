@@ -1,0 +1,23 @@
+/target
+**/*.rs.bk
+*.pdb
+*.tmp
+*.log
+.DS_Store
+Thumbs.db
+last_statusline_input.json
+
+# Ignore all markdown files except README.md and workspace rules
+*.md
+!README.md
+!.agents/**/*.md
+.agents/rules/
+
+benchmark.exe
+last_live_payload.json
+
+# Test fixtures are captured from real sessions and must be tracked verbatim -- per-task logs
+# (tasks/task-N.log) decide when the U+2699 indicator clears, so the blanket *.log above would
+# silently drop the very files under test.
+!tests/fixtures/**
+scripts/logs/

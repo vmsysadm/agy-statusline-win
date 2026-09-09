@@ -1,0 +1,9 @@
+{
+  "expect": "clean",
+  "captured": "2026-09-08T18:13:35.9301616-06:00",
+  "conversation": "a3546a9a-13ca-4992-ab5c-60cc66ecea0c",
+  "subagent_ages": {
+    "765c68f7-45db-486f-bfa9-3211e4db7c94": 0
+  },
+  "note": "Live agy -p: both lit 5.3-24.4s; task cleared first, proving independent detection."
+}

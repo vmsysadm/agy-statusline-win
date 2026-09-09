@@ -1,0 +1,9 @@
+{
+  "expect": "clean",
+  "captured": "2026-09-08T18:13:35.8676565-06:00",
+  "conversation": "aca493ab-dde3-4d69-a0df-073be093490a",
+  "subagent_ages": {
+    "5687ba14-430c-4eda-ac16-8e4cafbaccee": 0
+  },
+  "note": "Live agy -p: robot lit 3.8s, cleared 34.9s via turn-ended."
+}

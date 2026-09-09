@@ -1,0 +1,9 @@
+{
+  "expect": "clean",
+  "captured": "2026-09-08T18:13:36.0026089-06:00",
+  "conversation": "cb0aadbc-2fb8-4e0c-ba32-2f2d3c49c92e",
+  "subagent_ages": {
+    "d7ec633b-1383-4043-87a2-70d2c3a7857d": 3
+  },
+  "note": "Timer cancelled by early termination never reports in the transcript; only tasks/task-12.log retires it."
+}
